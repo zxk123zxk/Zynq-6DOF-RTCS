@@ -1,0 +1,23 @@
+# Copy to arm_calibration.toml only after physical measurement.
+# This template is deliberately non-executable: values below are placeholders.
+
+[arm]
+axis_count = 6
+position_unit = "TODO: servo-count or calibrated-radian"
+
+[[axis]]
+name = "joint_1"
+servo_id = -1
+direction = 0
+zero_count = -1
+safe_min = -1
+safe_max = -1
+
+# Add five measured axis tables using the same keys.
+
+[bus]
+baud = 1000000
+data_bits = 8
+parity = "none"
+stop_bits = 1
+sync_read_verified = false

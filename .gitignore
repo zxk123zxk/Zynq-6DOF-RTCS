@@ -1,0 +1,33 @@
+# Vivado / Vitis generated files
+*.Xil/
+.Xil/
+*.cache/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.gen/
+*.jou
+*.log
+*.str
+*.dcp
+*.bit
+*.hwh
+*.xsa
+
+# Software build products
+build/
+install/
+log/
+*.o
+*.a
+*.so
+
+# Captures and locally measured data
+data/raw/
+data/captures/
+*.wdb
+*.vcd
+*.ila
+
+/Material_Library/
