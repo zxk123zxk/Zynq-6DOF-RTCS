@@ -1,5 +1,5 @@
-// Interface reservation. Implement trapezoidal profiles only after the joint
-// unit, limits and servo timing have been measured and frozen.
+// 轨迹模块接口预留。只有在关节单位、机械限位和舵机时序均完成实测、冻结后，
+// 才可在此实现梯形速度轨迹；当前模块不产生运动。
 module trajectory_engine #(
   parameter int unsigned AXIS_COUNT = 6
 ) (

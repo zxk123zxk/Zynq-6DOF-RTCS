@@ -1,10 +1,8 @@
-## AX7020 constraint template. Pin locations and IOSTANDARD values are NOT
-## filled in because they must be copied from the exact board schematic/manual.
-## Do not synthesize or connect a live servo bus with this file unchanged.
+## AX7020 约束模板。第 0 阶段的 100 MHz AXI 时钟来自 PS FCLK0，
+## Vivado Block Design 自动携带时钟约束；这里不再对不存在的顶层端口建时钟。
+## 此文件未经 G0 核验时，不得添加或连接任何真实舵机 IO。
 
-create_clock -name pl_axi_clk -period 10.000 [get_ports s_axi_aclk]
-
-## Example only -- replace <PIN> and voltage standard after G0 verification:
+## 仅为示例：G0 核验后，以真实引脚和电压标准替换 <PIN>。
 ## set_property PACKAGE_PIN <PIN> [get_ports servo_rx]
 ## set_property IOSTANDARD LVCMOS33 [get_ports servo_rx]
 ## set_property PACKAGE_PIN <PIN> [get_ports servo_tx]

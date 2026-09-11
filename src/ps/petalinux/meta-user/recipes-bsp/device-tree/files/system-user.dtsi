@@ -1,0 +1,27 @@
+/include/ "system-conf.dtsi"
+
+/ {
+  aliases {
+    serial0 = &uart1;
+  };
+};
+
+&uart1 {
+  u-boot,dm-pre-reloc;
+  status = "okay";
+};
+
+&sdhci0 {
+  u-boot,dm-pre-reloc;
+  status = "okay";
+};
+
+&amba_pl {
+  rtcs_uio: rtcs@43c00000 {
+    compatible = "generic-uio";
+    reg = <0x43c00000 0x00010000>;
+    interrupt-parent = <&intc>;
+    interrupts = <0 29 4>;
+    status = "okay";
+  };
+};

@@ -1,5 +1,5 @@
-# Copy to arm_calibration.toml only after physical measurement.
-# This template is deliberately non-executable: values below are placeholders.
+# 仅在完成实物测量后复制为 arm_calibration.toml。
+# 此模板故意不可直接执行：以下数值全部只是占位符。
 
 [arm]
 axis_count = 6
@@ -13,7 +13,7 @@ zero_count = -1
 safe_min = -1
 safe_max = -1
 
-# Add five measured axis tables using the same keys.
+# 按相同字段补充其余五个经测量的关节表。
 
 [bus]
 baud = 1000000

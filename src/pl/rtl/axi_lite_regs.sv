@@ -19,6 +19,7 @@ module axi_lite_regs #(
   logic aw_hold, w_hold;
   integer i;
 
+  // 根据 AXI 写选通掩码合并字节，避免部分写误覆盖同一寄存器的其他字节。
   function automatic logic [31:0] merge_bytes(
     input logic [31:0] prior, input logic [31:0] incoming, input logic [3:0] strobe
   );
@@ -42,6 +43,7 @@ module axi_lite_regs #(
         wstrb_q <= s_axi_wstrb;
         w_hold <= 1'b1;
       end
+      // AXI 地址和数据可在不同周期到达；两者齐全后才提交一次写事务。
       if (aw_hold && w_hold && !s_axi_bvalid) begin
         unique case (awaddr_q[7:0])
           REG_CONTROL: control <= merge_bytes(control, wdata_q, wstrb_q);
@@ -72,6 +74,7 @@ module axi_lite_regs #(
     else begin
       if (s_axi_arvalid && s_axi_arready) begin
         s_axi_rvalid <= 1'b1;
+        // 读地址握手后锁存返回数据，直到主机完成 R 通道握手。
         unique case (s_axi_araddr[7:0])
           REG_ID_VERSION: s_axi_rdata <= ID_VERSION;
           REG_CONTROL: s_axi_rdata <= control;

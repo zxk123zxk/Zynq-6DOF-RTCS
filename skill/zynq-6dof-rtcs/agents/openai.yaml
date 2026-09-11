@@ -1,0 +1,6 @@
+interface:
+  display_name: "Zynq 六轴机械臂控制"
+  short_description: "AX7020 机械臂的受控修改与只读讲解"
+  default_prompt: "Use $zynq-6dof-rtcs to handle this AX7020 six-axis robot-controller request."
+policy:
+  allow_implicit_invocation: true

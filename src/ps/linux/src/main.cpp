@@ -6,6 +6,7 @@
 #include <cstring>
 
 namespace {
+// 参数检查独立封装，避免后续硬件访问路径绕过安全的 dry-run 入口。
 void print_usage(const char* program) {
   std::cerr << "usage: " << program << " --dry-run\n";
 }
@@ -17,8 +18,8 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
 
-  // Intentionally no /dev/uio mapping yet. The UIO node, physical base address,
-  // interrupt wiring and safety interlock are board-integration deliverables.
+  // 当前故意不映射 /dev/uio。UIO 设备节点、物理基地址、中断连线与安全互锁
+  // 都必须在板级集成阶段确认；因此本程序现阶段只输出 ABI 信息。
   std::cout << "RTCS PS control skeleton\n"
             << "register ABI: 0x" << std::hex << rtcs::kIdVersion << std::dec << "\n"
             << "axes: " << rtcs::kAxisCount << "\n"
