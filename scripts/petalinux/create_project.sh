@@ -29,9 +29,15 @@ install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-apps/rtcs-uart
   "$project_dir/project-spec/meta-user/recipes-apps/rtcs-uart-smoke/rtcs-uart-smoke.bb"
 install -D -m 0644 "$repo_root/src/ps/linux/apps/rtcs_uart_smoke.c" \
   "$project_dir/project-spec/meta-user/recipes-apps/rtcs-uart-smoke/files/rtcs_uart_smoke.c"
+install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-apps/rtcs-uart-loopback/rtcs-uart-loopback.bb" \
+  "$project_dir/project-spec/meta-user/recipes-apps/rtcs-uart-loopback/rtcs-uart-loopback.bb"
+install -D -m 0644 "$repo_root/src/ps/linux/apps/rtcs_uart_loopback.c" \
+  "$project_dir/project-spec/meta-user/recipes-apps/rtcs-uart-loopback/files/rtcs_uart_loopback.c"
 install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-bsp/device-tree/files/system-user.dtsi" \
   "$project_dir/project-spec/meta-user/recipes-bsp/device-tree/files/system-user.dtsi"
 rootfs_config="$project_dir/project-spec/meta-user/conf/user-rootfsconfig"
 grep -qxF 'CONFIG_rtcs-uart-smoke=y' "$rootfs_config" || \
   echo 'CONFIG_rtcs-uart-smoke=y' >> "$rootfs_config"
+grep -qxF 'CONFIG_rtcs-uart-loopback=y' "$rootfs_config" || \
+  echo 'CONFIG_rtcs-uart-loopback=y' >> "$rootfs_config"
 echo "PetaLinux project prepared: $project_dir"
