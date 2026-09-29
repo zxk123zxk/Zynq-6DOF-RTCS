@@ -16,4 +16,10 @@ if(NOT WIN32)
   add_executable(rtcs_uart_loopback apps/rtcs_uart_loopback.c)
   set_target_properties(rtcs_uart_loopback PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED YES)
   target_compile_options(rtcs_uart_loopback PRIVATE -Wall -Wextra -Wpedantic)
+
+  # 此程序用 PS USB Host + BusLinker 做 G1 只读协议基线；它不访问
+  # UIO，也不发送任何写寄存器或运动指令。
+  add_executable(rtcs_buslinker_g1 apps/rtcs_buslinker_g1.c)
+  set_target_properties(rtcs_buslinker_g1 PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED YES)
+  target_compile_options(rtcs_buslinker_g1 PRIVATE -Wall -Wextra -Wpedantic)
 endif()

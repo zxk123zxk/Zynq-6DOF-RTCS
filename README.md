@@ -6,10 +6,10 @@
 
 ## 当前状态
 
-当前处于“G0 已完成、G1 未开始”：PS–PL 基础工程和寄存器仿真已完成，但这不是可驱动机械臂的完成品：
+当前处于“G0 新镜像待实物复验、G1 只读 USB 通信待验收”：Vivado 实现、XSA 与寄存器/协议仿真已通过，但不是可驱动机械臂的完成品：
 
 - PS：提供 Linux UIO/MMIO C++ 控制程序的最小可编译骨架及统一寄存器定义。
-- PL：提供 AXI4-Lite 控制面、时钟计数器和全部关键模块边界；执行器输出默认三态，绝不会在未完成协议和实机验证前误动作。
+- PL：提供 AXI4-Lite 控制面、时钟计数器和模块边界；目前不导出舵机 IO，`servo_tx_en` 固定为零。
 - 工程：已提供 AX7Z020B 的 Vivado 2023.2 PS7/AXI Block Design、PetaLinux 2023.2 构建脚本、PS UART1 Linux 冒烟程序、验证清单、寄存器契约与阶段验收标准。
 
 不要把 `Material_Library/` 中的参考工程纳入本项目构建。`mycpu--` 是独立 RISC-V SoC 项目；KR260 工程面向 KR260、ROS2、USB 串口/PWM 机械臂，不能复用为 AX7020 的总线舵机控制器。
@@ -28,7 +28,7 @@ PL (registers -> command FIFO -> trajectory -> safety -> servo bus)
 
 （中文：USB 摄像头数据由 PS 上的 Linux 处理视觉、任务状态机、正逆运动学和截止时间；PS 经 AXI4-Lite 与中断同 PL 通信。PL 依次完成寄存器、命令队列、轨迹、安全和舵机总线工作；再经 1 Mbps 半双工 UART 连接六个 HX-30HM 舵机，位置/状态反馈沿相反方向返回。）
 
-当前 G0 的核心改动见 [docs/0.G0-ps-pl-foundation.md](docs/0.G0-ps-pl-foundation.md)；后续阶段按 `docs/1.*` 至 `docs/4.*` 记录，统一门禁见 [docs/hardware_bringup.md](docs/hardware_bringup.md)。AXI 寄存器契约以 `src/pl/rtl/rtcs_pkg.sv` 和 `src/ps/linux/include/rtcs_registers.hpp` 为准。
+当前 G0 的核心改动见 [docs/0.G0-ps-pl-foundation.md](docs/0.G0-ps-pl-foundation.md)；后续阶段按 `docs/1.*` 至 `docs/4.*` 记录，统一门禁见 [docs/0.1hardware_bringup.md](docs/0.1hardware_bringup.md)。AXI 寄存器契约以 `src/pl/rtl/rtcs_pkg.sv` 和 `src/ps/linux/include/rtcs_registers.hpp` 为准。
 当前八周学习、分工和验收计划见 [docs/team_eight_week_plan.md](docs/team_eight_week_plan.md)。
 
 ## Repository layout（仓库目录说明）
@@ -48,10 +48,10 @@ skill/             Reusable competition deliverable（可复用的竞赛交付�
 
 ## First build milestone（首次构建里程碑）
 
-1. In Vivado 2023.2, run `src/pl/vivado/create_project.tcl`; append `-tclargs build` to generate the bitstream/XSA.（在 Vivado 2023.2 中运行脚本；增加 `-tclargs build` 可生成 bitstream/XSA。）
-2. Use `scripts/petalinux/create_project.sh` and `scripts/petalinux/build_sd_image.sh` in a PetaLinux 2023.2 WSL environment.（在 PetaLinux 2023.2 WSL 环境中运行两个脚本。）
+1. Windows: `powershell -ExecutionPolicy Bypass -File scripts/build_vivado.ps1 -Build`。生成物在 `artifacts/`，其中 XSA 固定为 `artifacts/hw/rtcs_system.xsa`。
+2. WSL/PetaLinux 2023.2: 使用 `scripts/petalinux/create_project.sh --import-hw <现有项目目录>` 导入新 XSA，或用 `--sync-only` 只更新 Linux 源码；再调用 `scripts/petalinux/build_sd_image.sh <现有项目目录>`。
 3. Boot the FAT32 SD image, log in at UART1 and run `rtcs-uart-smoke`.（由 FAT32 SD 卡启动，通过 UART1 登录后运行 `rtcs-uart-smoke`。）
-4. Follow [docs/0.G0-ps-pl-foundation.md](docs/0.G0-ps-pl-foundation.md) and [docs/hardware_bringup.md](docs/hardware_bringup.md) before enabling any servo transmit signal.（启用任何舵机发送信号前，必须完成 G0 与上板总规划要求。）
+4. Follow [docs/0.G0-ps-pl-foundation.md](docs/0.G0-ps-pl-foundation.md) and [docs/0.1hardware_bringup.md](docs/0.1hardware_bringup.md) before enabling any servo transmit signal.（启用任何舵机发送信号前，必须完成 G0 与上板总规划要求。）
 
 The `servo_tx_en` output is intentionally hard-disabled in this revision. Its release is an explicit gate after electrical, protocol, packet-parser and emergency-stop tests pass.（本版本故意硬性禁用 `servo_tx_en` 输出；只有通过电气、协议、数据包解析器和急停测试后，才允许明确解锁。）
 

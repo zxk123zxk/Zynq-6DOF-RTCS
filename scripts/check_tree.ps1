@@ -1,6 +1,6 @@
 $required = @(
   'README.md',
-  'docs/hardware_bringup.md',
+  'docs/0.1hardware_bringup.md',
   'docs/0.G0-ps-pl-foundation.md',
   'docs/1.G1-single-servo-protocol.md',
   'docs/2.G2-six-axis-calibration.md',

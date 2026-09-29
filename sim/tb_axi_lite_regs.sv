@@ -38,15 +38,16 @@ module tb_axi_lite_regs;
   logic [63:0] deadline;
   logic [31:0] servo_config;
 
-  axi_lite_regs #(.AXIS_COUNT(AXIS_COUNT)) dut (
-    .clk, .rst_n,
-    .s_axi_awaddr, .s_axi_awvalid, .s_axi_awready,
-    .s_axi_wdata, .s_axi_wstrb, .s_axi_wvalid, .s_axi_wready,
-    .s_axi_bresp, .s_axi_bvalid, .s_axi_bready,
-    .s_axi_araddr, .s_axi_arvalid, .s_axi_arready,
-    .s_axi_rdata, .s_axi_rresp, .s_axi_rvalid, .s_axi_rready,
-    .hw_ticks, .control, .command, .status, .irq_status,
-    .target, .profile_speed, .profile_accel, .deadline, .servo_config
+  axi_lite_regs #(.AXI_ADDR_WIDTH(8), .AXIS_COUNT(AXIS_COUNT)) dut (
+    .aclk(clk), .aresetn(rst_n),
+    .saxi_awaddr(s_axi_awaddr[7:0]), .saxi_awvalid(s_axi_awvalid), .saxi_awready(s_axi_awready),
+    .saxi_araddr(s_axi_araddr[7:0]), .saxi_arvalid(s_axi_arvalid), .saxi_arready(s_axi_arready),
+    .saxi_wready(s_axi_wready), .saxi_wvalid(s_axi_wvalid), .saxi_wdata(s_axi_wdata), .saxi_wstrb(s_axi_wstrb),
+    .saxi_rready(s_axi_rready), .saxi_rvalid(s_axi_rvalid), .saxi_rdata(s_axi_rdata), .saxi_rresp(s_axi_rresp),
+    .saxi_bready(s_axi_bready), .saxi_bvalid(s_axi_bvalid), .saxi_bresp(s_axi_bresp),
+    .hw_ticks(hw_ticks), .status(status), .irq_status(irq_status),
+    .control(control), .command(command), .target(target), .profile_speed(profile_speed),
+    .profile_accel(profile_accel), .deadline(deadline), .servo_config(servo_config)
   );
 
   always #5 clk = ~clk;

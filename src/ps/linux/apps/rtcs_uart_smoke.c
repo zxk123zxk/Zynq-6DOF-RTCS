@@ -1,3 +1,6 @@
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>

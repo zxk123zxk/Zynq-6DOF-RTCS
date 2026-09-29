@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
-// Verilog-only BD top required by Vivado 2023.2 module-reference inference.
-// The underlying rtcs_top is SystemVerilog.  No physical servo ports exist in
-// G0; the core internally keeps its transmitter disabled.
+// Sole BD module-reference wrapper. Final synthesis hierarchy is:
+// rtcs_system_wrapper -> rtcs_system -> rtcs_axi_wrapper_bd -> rtcs_top.
+// No physical servo ports are exported in G0/G1 USB mode.
 module rtcs_axi_wrapper_bd (
   input wire s_axi_aclk, input wire s_axi_aresetn,
   input wire [31:0] s_axi_awaddr, input wire s_axi_awvalid, output wire s_axi_awready,

@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$buildDir = Join-Path $repoRoot 'build\sim'
+$buildDir = Join-Path $repoRoot 'artifacts\sim'
 $output = Join-Path $buildDir 'tb_axi_lite_regs.vvp'
 $testbench = Join-Path $PSScriptRoot 'tb_axi_lite_regs.sv'
 $rtl = @(

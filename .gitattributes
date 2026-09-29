@@ -1,0 +1,5 @@
+scripts/petalinux/*.sh text eol=lf
+scripts/petalinux/*.cmd text eol=lf
+src/ps/petalinux/**/*.bb text eol=lf
+src/ps/petalinux/**/*.bbappend text eol=lf
+src/ps/petalinux/**/*.cfg text eol=lf
