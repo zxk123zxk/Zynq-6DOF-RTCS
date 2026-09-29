@@ -1,0 +1,4 @@
+interface:
+  display_name: "RTCS Image Build"
+  short_description: "Build Vivado hardware and four PetaLinux SD files"
+  default_prompt: "Use $rtcs-image-build to rebuild this RTCS repository's bitstream, XSA, and SD boot files."
