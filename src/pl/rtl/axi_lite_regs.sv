@@ -44,6 +44,9 @@ module axi_lite_regs #(
   input  logic [63:0]               hw_ticks,
   input  logic [31:0]               status,
   input  logic [31:0]               irq_status,
+  input  logic [31:0]               g1_status,
+  input  logic [31:0]               g1_result,
+  input  logic [31:0]               g1_fault,
 
   // PS 写入、后续运动模块读取的控制寄存器。
   output logic [31:0]               control,
@@ -52,7 +55,11 @@ module axi_lite_regs #(
   output logic [31:0]               profile_speed,
   output logic [31:0]               profile_accel,
   output logic [63:0]               deadline,
-  output logic [31:0]               servo_config
+  output logic [31:0]               servo_config,
+  output logic [7:0]                g1_id,
+  output logic [7:0]                g1_op,
+  output logic                      g1_start,
+  output logic                      g1_clear
 );
   import rtcs_pkg::*;
 
@@ -66,6 +73,7 @@ module axi_lite_regs #(
   logic [31:0] profile_accel_reg;
   logic [63:0] deadline_reg;
   logic [31:0] servo_config_reg;
+  logic [7:0] g1_id_reg, g1_op_reg;
   integer read_axis_index;
   integer write_axis_index;
 
@@ -75,6 +83,8 @@ module axi_lite_regs #(
   assign profile_accel = profile_accel_reg;
   assign deadline      = deadline_reg;
   assign servo_config  = servo_config_reg;
+  assign g1_id = g1_id_reg;
+  assign g1_op = g1_op_reg;
 
   generate
     for (genvar axis = 0; axis < AXIS_COUNT; axis = axis + 1) begin : g_target_outputs
@@ -225,6 +235,11 @@ module axi_lite_regs #(
       REG_DEADLINE_LO:   axi_data_to_read = deadline_reg[31:0];
       REG_DEADLINE_HI:   axi_data_to_read = deadline_reg[63:32];
       REG_SERVO_CONFIG:  axi_data_to_read = servo_config_reg;
+      REG_G1_ID:         axi_data_to_read = {24'd0, g1_id_reg};
+      REG_G1_OP:         axi_data_to_read = {24'd0, g1_op_reg};
+      REG_G1_STATUS:     axi_data_to_read = g1_status;
+      REG_G1_RESULT:     axi_data_to_read = g1_result;
+      REG_G1_FAULT:      axi_data_to_read = g1_fault;
       default: begin
         axi_data_to_read = 32'b0;
         for (read_axis_index = 0; read_axis_index < AXIS_COUNT; read_axis_index = read_axis_index + 1) begin
@@ -266,9 +281,16 @@ module axi_lite_regs #(
       profile_accel_reg <= 32'b0;
       deadline_reg      <= 64'b0;
       servo_config_reg  <= 32'b0;
+      g1_id_reg <= '0;
+      g1_op_reg <= '0;
+      g1_start <= 1'b0;
+      g1_clear <= 1'b0;
       for (write_axis_index = 0; write_axis_index < AXIS_COUNT; write_axis_index = write_axis_index + 1)
         target_reg[write_axis_index] <= 32'b0;
-    end else if (axi_need_write_response) begin
+    end else begin
+      g1_start <= 1'b0;
+      g1_clear <= 1'b0;
+      if (axi_need_write_response) begin
       unique case (axi_waddr)
         REG_CONTROL:
           control_reg <= merge_write_bytes(control_reg, axi_wdata_buffer, axi_wstrb_buffer);
@@ -284,6 +306,15 @@ module axi_lite_regs #(
           deadline_reg[63:32] <= merge_write_bytes(deadline_reg[63:32], axi_wdata_buffer, axi_wstrb_buffer);
         REG_SERVO_CONFIG:
           servo_config_reg <= merge_write_bytes(servo_config_reg, axi_wdata_buffer, axi_wstrb_buffer);
+        REG_G1_ID:
+          if (axi_wstrb_buffer[0]) g1_id_reg <= axi_wdata_buffer[7:0];
+        REG_G1_OP:
+          if (axi_wstrb_buffer[0]) g1_op_reg <= axi_wdata_buffer[7:0];
+        REG_G1_CMD:
+          if (axi_wstrb_buffer == 4'hf) begin
+            if (axi_wdata_buffer == 32'd1) g1_start <= 1'b1;
+            if (axi_wdata_buffer == 32'd2) g1_clear <= 1'b1;
+          end
         default: begin
           for (write_axis_index = 0; write_axis_index < AXIS_COUNT; write_axis_index = write_axis_index + 1) begin
             if (axi_waddr == (REG_TARGET0 + (write_axis_index * 4)))
@@ -293,6 +324,7 @@ module axi_lite_regs #(
           end
         end
       endcase
+      end
     end
   end
 endmodule

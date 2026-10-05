@@ -22,4 +22,8 @@ if(NOT WIN32)
   add_executable(rtcs_buslinker_g1 apps/rtcs_buslinker_g1.c)
   set_target_properties(rtcs_buslinker_g1 PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED YES)
   target_compile_options(rtcs_buslinker_g1 PRIVATE -Wall -Wextra -Wpedantic)
+
+  add_executable(rtcs_pl_g1 apps/rtcs_pl_g1.c)
+  set_target_properties(rtcs_pl_g1 PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED YES)
+  target_compile_options(rtcs_pl_g1 PRIVATE -Wall -Wextra -Wpedantic)
 endif()

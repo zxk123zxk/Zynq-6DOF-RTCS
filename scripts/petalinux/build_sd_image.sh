@@ -38,6 +38,10 @@ fi
 for file in zynq_fsbl.elf system.bit u-boot.elf image.ub; do
   [[ -s "$project_dir/images/linux/$file" ]] || { echo "Missing build output: $file" >&2; exit 66; }
 done
+if ! cmp -s "$project_dir/images/linux/system.bit" "$repo_root/artifacts/hw/rtcs_system.bit"; then
+  echo 'PetaLinux system.bit differs from artifacts/hw/rtcs_system.bit; refusing to package a stale bitstream' >&2
+  exit 65
+fi
 petalinux-package --boot --project "$project_dir" --force \
   --fsbl "$project_dir/images/linux/zynq_fsbl.elf" \
   --fpga "$project_dir/images/linux/system.bit" \

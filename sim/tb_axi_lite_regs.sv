@@ -37,6 +37,16 @@ module tb_axi_lite_regs;
   logic [31:0] profile_accel;
   logic [63:0] deadline;
   logic [31:0] servo_config;
+  logic [31:0] g1_status = 32'h0000_0008;
+  logic [31:0] g1_result = 32'h0000_0518;
+  logic [31:0] g1_fault = 32'h0000_0003;
+  logic [7:0] g1_id, g1_op;
+  logic g1_start, g1_clear;
+  integer start_count = 0, clear_count = 0;
+  always @(posedge clk) if (rst_n) begin
+    if (g1_start) start_count = start_count + 1;
+    if (g1_clear) clear_count = clear_count + 1;
+  end
 
   axi_lite_regs #(.AXI_ADDR_WIDTH(8), .AXIS_COUNT(AXIS_COUNT)) dut (
     .aclk(clk), .aresetn(rst_n),
@@ -46,8 +56,10 @@ module tb_axi_lite_regs;
     .saxi_rready(s_axi_rready), .saxi_rvalid(s_axi_rvalid), .saxi_rdata(s_axi_rdata), .saxi_rresp(s_axi_rresp),
     .saxi_bready(s_axi_bready), .saxi_bvalid(s_axi_bvalid), .saxi_bresp(s_axi_bresp),
     .hw_ticks(hw_ticks), .status(status), .irq_status(irq_status),
+    .g1_status(g1_status), .g1_result(g1_result), .g1_fault(g1_fault),
     .control(control), .command(command), .target(target), .profile_speed(profile_speed),
-    .profile_accel(profile_accel), .deadline(deadline), .servo_config(servo_config)
+    .profile_accel(profile_accel), .deadline(deadline), .servo_config(servo_config),
+    .g1_id(g1_id), .g1_op(g1_op), .g1_start(g1_start), .g1_clear(g1_clear)
   );
 
   always #5 clk = ~clk;
@@ -194,7 +206,8 @@ module tb_axi_lite_regs;
             "ready signals must be low while reset is asserted");
     require(!s_axi_bvalid && !s_axi_rvalid, "response valids must reset low");
     require(control == '0 && command == '0 && profile_speed == '0 &&
-            profile_accel == '0 && deadline == '0 && servo_config == '0,
+            profile_accel == '0 && deadline == '0 && servo_config == '0 &&
+            g1_id == 0 && g1_op == 0 && !g1_start && !g1_clear,
             "all writable scalar registers must reset to zero");
     for (axis = 0; axis < AXIS_COUNT; axis = axis + 1)
       require(target[axis] == '0, "all six target registers must reset to zero");
@@ -248,6 +261,28 @@ module tb_axi_lite_regs;
       require(readback == (32'h6100_0000 + axis), "target register readback mismatch");
       require(target[axis] == (32'h6100_0000 + axis), "target register output mismatch");
     end
+
+    write_same_cycle(REG_G1_ID, 32'h0000_0006, 4'hf);
+    write_same_cycle(REG_G1_OP, 32'h0000_0002, 4'hf);
+    read_register(REG_G1_ID, readback);
+    require(readback == 6 && g1_id == 6, "G1 ID mismatch");
+    read_register(REG_G1_OP, readback);
+    require(readback == 2 && g1_op == 2, "G1 opcode mismatch");
+    read_register(REG_G1_STATUS, readback);
+    require(readback == g1_status, "G1 status mismatch");
+    read_register(REG_G1_RESULT, readback);
+    require(readback == g1_result, "G1 result mismatch");
+    read_register(REG_G1_FAULT, readback);
+    require(readback == g1_fault, "G1 fault mismatch");
+    write_same_cycle(REG_G1_ID, 32'h0000_00ff, 4'b0010);
+    require(g1_id == 6, "G1 ID must honor WSTRB");
+    write_same_cycle(REG_G1_CMD, 32'd1, 4'b0001);
+    require(!g1_start, "partial command must not start");
+    require(start_count == 0, "partial command pulse occurred");
+    write_same_cycle(REG_G1_CMD, 32'd1, 4'hf);
+    require(start_count == 1, "full command must pulse exactly once");
+    write_same_cycle(REG_G1_CMD, 32'd2, 4'hf);
+    require(clear_count == 1, "clear command must pulse exactly once");
 
     $display("TB_AXI_LITE_REGS_PASS");
     $finish;

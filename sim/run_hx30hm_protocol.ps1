@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$buildDir = Join-Path $repoRoot 'artifacts\sim'
+$buildDir = Join-Path $repoRoot 'build\sim'
 $output = Join-Path $buildDir 'tb_hx30hm_protocol.vvp'
 $package = Join-Path $repoRoot 'src\pl\rtl\hx30hm_protocol_pkg.sv'
 $testbench = Join-Path $PSScriptRoot 'tb_hx30hm_protocol.sv'

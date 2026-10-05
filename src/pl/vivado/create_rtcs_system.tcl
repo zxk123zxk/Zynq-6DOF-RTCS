@@ -13,7 +13,14 @@ set axi [create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 ps7_ax
 set_property -dict [list CONFIG.NUM_SI {1} CONFIG.NUM_MI {1}] $axi
 
 set rst [create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 rst_ps7_0_100m]
-set rtcs [create_bd_cell -type module -reference rtcs_axi_wrapper_bd rtcs_axi_wrapper_0]
+set rtcs [create_bd_cell -type module -reference $rtcs_reference rtcs_axi_wrapper_0]
+if {$g1_ttl_ports} {
+  foreach port_name {servo_ttl_rx servo_ttl_tx g1_inhibit} {
+    set direction [expr {$port_name eq "servo_ttl_tx" ? "O" : "I"}]
+    create_bd_port -dir $direction $port_name
+    connect_bd_net [get_bd_ports $port_name] [get_bd_pins rtcs_axi_wrapper_0/$port_name]
+  }
+}
 
 set irq_concat [create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 irq_concat_0]
 set_property -dict [list CONFIG.NUM_PORTS {2} CONFIG.IN0_WIDTH {1} CONFIG.IN1_WIDTH {15}] $irq_concat

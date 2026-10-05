@@ -6,6 +6,8 @@ set project_name zynq_rtcs
 set artifacts_dir [file join $project_root artifacts]
 set project_dir [file join $artifacts_dir vivado $project_name]
 set part xc7z020clg400-2
+set g1_ttl_ports [expr {[lsearch -exact $argv ttl] >= 0}]
+set rtcs_reference [expr {$g1_ttl_ports ? "rtcs_axi_wrapper_ttl_bd" : "rtcs_axi_wrapper_bd"}]
 
 foreach subdir {vivado hw reports sd logs sim} {
   file mkdir [file join $artifacts_dir $subdir]
@@ -26,10 +28,17 @@ if {[llength $rtl_files] == 0 || [llength $verilog_files] == 0} {
 add_files $rtl_files
 add_files $verilog_files
 add_files -fileset constrs_1 "$project_root/src/pl/xdc/ax7020_template.xdc"
+if {$g1_ttl_ports} {
+  add_files -fileset constrs_1 "$project_root/src/pl/xdc/ax7020_g1_ttl.xdc"
+}
 source "$script_dir/create_rtcs_system.tcl"
 
 puts "已创建 AX7Z020B PS7/AXI 基础工程：FCLK0=100 MHz，RTCS=0x43C00000/64 KiB。"
-puts "该版本不导出舵机 IO，servo_tx_en 保持硬性禁用。"
+if {$g1_ttl_ports} {
+  puts "G1 TTL build: J20 TX=V15 RX=U20, physical inhibit W15 pulled high by default."
+} else {
+  puts "该版本不导出舵机 IO，servo_tx_en 保持硬性禁用。"
+}
 
 # Use `vivado -mode batch -source create_project.tcl -tclargs build` on a
 # machine where a complete hardware build is desired.  Keeping this opt-in
@@ -44,6 +53,26 @@ if {[lsearch -exact $argv build] >= 0} {
     error "Implementation/bitstream failed: $impl_status; see $project_dir/$project_name.runs/impl_1/runme.log"
   }
   open_run impl_1
+  if {$g1_ttl_ports} {
+    foreach {port expected_pin} {servo_ttl_tx V15 servo_ttl_rx U20 g1_inhibit W15} {
+      set actual_pin [get_property PACKAGE_PIN [get_ports $port]]
+      if {$actual_pin ne $expected_pin} {
+        error "G1 TTL port $port is on $actual_pin, expected $expected_pin"
+      }
+      set io_standard [get_property IOSTANDARD [get_ports $port]]
+      if {$io_standard ne "LVCMOS33"} {
+        error "G1 TTL port $port uses $io_standard, expected LVCMOS33"
+      }
+    }
+    set tx_tristates [get_cells -hier -filter {REF_NAME == OBUFT}]
+    if {[llength $tx_tristates] != 1} {
+      error "G1 TTL requires exactly one physical OBUFT; found [llength $tx_tristates]"
+    }
+    if {![string is true -strict [get_property PULLUP [get_ports g1_inhibit]]]} {
+      error "G1 inhibit W15 must have an enabled internal PULLUP"
+    }
+    puts "RTCS_G1_TTL_IO_OK tx=V15 rx=U20 inhibit=W15 pullup=TRUE obuft=[llength $tx_tristates]"
+  }
   report_timing_summary -file [file join $reports_dir timing_summary.rpt]
   report_utilization -file [file join $reports_dir utilization.rpt]
   report_methodology -file [file join $reports_dir methodology.rpt]

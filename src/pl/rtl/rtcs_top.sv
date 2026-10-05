@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 module rtcs_top #(
-  parameter int unsigned AXIS_COUNT = 6
+  parameter int unsigned AXIS_COUNT = 6,
+  parameter bit G1_TTL_PORTS = 1'b0
 ) (
   input  logic         s_axi_aclk,
   input  logic         s_axi_aresetn,
@@ -32,6 +33,13 @@ module rtcs_top #(
   logic [31:0] control, command, status, irq_status, profile_speed, profile_accel, servo_config;
   logic [63:0] deadline;
   logic [31:0] target [0:AXIS_COUNT-1];
+  logic [7:0] g1_id, g1_op, g1_servo_error;
+  logic g1_start, g1_clear, g1_busy, g1_done;
+  logic g1_clear_effective;
+  (* mark_debug = "true" *) logic g1_internal_tx, g1_internal_tx_en;
+  logic [3:0] g1_fault_code;
+  logic [15:0] g1_position;
+  logic [31:0] g1_status, g1_result, g1_fault;
   (* mark_debug = "true" *) logic [7:0] rx_observed_byte;
   (* mark_debug = "true" *) logic rx_observed_valid;
   (* mark_debug = "true" *) logic rx_protocol_fault;
@@ -52,9 +60,28 @@ module rtcs_top #(
     .saxi_rready(s_axi_rready), .saxi_rvalid(s_axi_rvalid), .saxi_rdata(s_axi_rdata), .saxi_rresp(s_axi_rresp),
     .saxi_bready(s_axi_bready), .saxi_bvalid(s_axi_bvalid), .saxi_bresp(s_axi_bresp),
     .hw_ticks(hw_ticks), .status(status), .irq_status(irq_status),
+    .g1_status(g1_status), .g1_result(g1_result), .g1_fault(g1_fault),
     .control(control), .command(command), .target(target), .profile_speed(profile_speed),
-    .profile_accel(profile_accel), .deadline(deadline), .servo_config(servo_config)
+    .profile_accel(profile_accel), .deadline(deadline), .servo_config(servo_config),
+    .g1_id(g1_id), .g1_op(g1_op), .g1_start(g1_start), .g1_clear(g1_clear)
   );
+
+  hx30hm_g1_engine u_g1 (
+    .clk(s_axi_aclk), .rst_n(s_axi_aresetn), .clear(g1_clear_effective),
+    .start(g1_start && estop_n),
+    .target_id(g1_id), .operation(g1_op), .rx(servo_rx),
+    .tx(g1_internal_tx), .tx_enable(g1_internal_tx_en),
+    .busy(g1_busy), .done(g1_done), .fault_code(g1_fault_code),
+    .servo_error(g1_servo_error), .position_raw(g1_position)
+  );
+
+  // Dropping the physical inhibit aborts a packet. Re-arming cannot resume a
+  // partially transmitted frame; software must issue a fresh command.
+  assign g1_clear_effective = g1_clear || (G1_TTL_PORTS && !estop_n);
+  assign g1_status = {28'd0, !(G1_TTL_PORTS && estop_n && s_axi_aresetn),
+                      (g1_fault_code != 0), g1_done, g1_busy};
+  assign g1_result = {8'd0, g1_servo_error, g1_position};
+  assign g1_fault = {28'd0, g1_fault_code};
 
   servo_bus_master u_rx_observer (
     .clk(s_axi_aclk), .rst_n(s_axi_aresetn), .rx(servo_rx),
@@ -62,13 +89,13 @@ module rtcs_top #(
     .observed_byte(rx_observed_byte), .observed_valid(rx_observed_valid)
   );
 
-  // 第 0 阶段的失效安全策略：发送端始终高阻。仅在安全监控器和物理层通过
-  // docs/0.1hardware_bringup.md 的上板门禁后，才可替换此逻辑。
+  // The safe wrapper remains hard-disabled. Only the TTL wrapper opts in,
+  // and a separate pulled-up physical inhibit must be grounded before TX.
   always_comb begin
-    servo_tx    = 1'b1;
-    servo_tx_en = 1'b0;
+    servo_tx    = G1_TTL_PORTS ? g1_internal_tx : 1'b1;
+    servo_tx_en = G1_TTL_PORTS && s_axi_aresetn && estop_n && g1_internal_tx_en;
     irq         = 1'b0;
-    status      = {30'd0, !estop_n, 1'b1}; // bit 0：安全禁用；bit 1：急停有效
+    status      = {30'd0, !estop_n, 1'b1}; // bit 0: motion disabled; bit 1: PL TX inhibit
     irq_status  = 32'd0;
   end
 endmodule

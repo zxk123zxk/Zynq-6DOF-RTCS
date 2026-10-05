@@ -6,10 +6,10 @@
 
 ## 当前状态
 
-当前处于“G0 新镜像待实物复验、G1 只读 USB 通信待验收”：Vivado 实现、XSA 与寄存器/协议仿真已通过，但不是可驱动机械臂的完成品：
+旧接线下的 PL 直连 G1 单舵机只读实物验收已通过并归档；新 J20 针位、ABI `0x52540003` 的 Vivado/PetaLinux 镜像已构建但尚未上板，同时只做 G2 离线准备。G1 通过不授权实物运动：
 
 - PS：提供 Linux UIO/MMIO C++ 控制程序的最小可编译骨架及统一寄存器定义。
-- PL：提供 AXI4-Lite 控制面、时钟计数器和模块边界；目前不导出舵机 IO，`servo_tx_en` 固定为零。
+- PL：提供 AXI4-Lite 控制面、时钟计数器、G1 单播 PING/READ 引擎；默认构建不导出舵机 IO，`-Ttl` 构建用 U20 RX、V15 三态 TX、W15 上拉禁发输入。G2 描述符校验模块尚未接入物理发送路径。
 - 工程：已提供 AX7Z020B 的 Vivado 2023.2 PS7/AXI Block Design、PetaLinux 2023.2 构建脚本、PS UART1 Linux 冒烟程序、验证清单、寄存器契约与阶段验收标准。
 
 不要把 `Material_Library/` 中的参考工程纳入本项目构建。`mycpu--` 是独立 RISC-V SoC 项目；KR260 工程面向 KR260、ROS2、USB 串口/PWM 机械臂，不能复用为 AX7020 的总线舵机控制器。
@@ -53,9 +53,9 @@ skill/             Reusable competition deliverable（可复用的竞赛交付�
 3. Boot the FAT32 SD image, log in at UART1 and run `rtcs-uart-smoke`.（由 FAT32 SD 卡启动，通过 UART1 登录后运行 `rtcs-uart-smoke`。）
 4. Follow [docs/0.G0-ps-pl-foundation.md](docs/0.G0-ps-pl-foundation.md) and [docs/0.1hardware_bringup.md](docs/0.1hardware_bringup.md) before enabling any servo transmit signal.（启用任何舵机发送信号前，必须完成 G0 与上板总规划要求。）
 
-The `servo_tx_en` output is intentionally hard-disabled in this revision. Its release is an explicit gate after electrical, protocol, packet-parser and emergency-stop tests pass.（本版本故意硬性禁用 `servo_tx_en` 输出；只有通过电气、协议、数据包解析器和急停测试后，才允许明确解锁。）
+The default build keeps servo TX disabled. The `-Ttl` build requires a separate physical J20-36/W15→J20-38/GND strap to enable read-only PING/READ; the independent servo power switch remains separate.（默认构建禁用舵机 TX；直连版需本地硬件允许跳线，且独立舵机电源开关不由软件代替。）
 
-The locally installed Vivado 2023.2 was used only to parse/create the RTL shell. Before submission, reproduce synthesis, timing and board verification using the contest-recommended Vivado/Vitis 2025.2 or 2026.1 and record that version in the report.（本机安装的 Vivado 2023.2 仅用于解析/创建 RTL 骨架。提交前必须使用竞赛推荐的 Vivado/Vitis 2025.2 或 2026.1 复现综合、时序和板级验证，并将版本记录在报告中。）
+旧 G1 镜像及测试证据见 [归档](artifacts/archive/g1-u20-inhibit-abi02-20261005/MANIFEST.md)。新镜像的首次上板步骤只在不接 BusLinker 时检查 `probe` 的版本及禁发跳线状态，见 [SD 操作说明](docs/SD启动与项目迭代操作说明.md)。
 
 ## Tooling decision（工具链决策）
 

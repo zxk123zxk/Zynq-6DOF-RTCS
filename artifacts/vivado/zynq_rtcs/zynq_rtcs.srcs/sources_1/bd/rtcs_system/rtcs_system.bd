@@ -1,7 +1,7 @@
 {
   "design": {
     "design_info": {
-      "boundary_crc": "0xCC6CFA53F622E079",
+      "boundary_crc": "0x89943C397314E0C3",
       "device": "xc7z020clg400-2",
       "gen_directory": "../../../../zynq_rtcs.gen/sources_1/bd/rtcs_system",
       "name": "rtcs_system",
@@ -190,6 +190,17 @@
             "direction": "IO"
           }
         }
+      }
+    },
+    "ports": {
+      "servo_ttl_rx": {
+        "direction": "I"
+      },
+      "servo_ttl_tx": {
+        "direction": "O"
+      },
+      "g1_inhibit": {
+        "direction": "I"
       }
     },
     "components": {
@@ -1460,14 +1471,14 @@
         "inst_hier_path": "rst_ps7_0_100m"
       },
       "rtcs_axi_wrapper_0": {
-        "vlnv": "xilinx.com:module_ref:rtcs_axi_wrapper_bd:1.0",
+        "vlnv": "xilinx.com:module_ref:rtcs_axi_wrapper_ttl_bd:1.0",
         "ip_revision": "1",
         "xci_name": "rtcs_system_rtcs_axi_wrapper_0_0",
         "xci_path": "ip\\rtcs_system_rtcs_axi_wrapper_0_0\\rtcs_system_rtcs_axi_wrapper_0_0.xci",
         "inst_hier_path": "rtcs_axi_wrapper_0",
         "reference_info": {
           "ref_type": "hdl",
-          "ref_name": "rtcs_axi_wrapper_bd",
+          "ref_name": "rtcs_axi_wrapper_ttl_bd",
           "boundary_crc": "0x0"
         },
         "interface_ports": {
@@ -1718,6 +1729,15 @@
                 "value_src": "default_prop"
               }
             }
+          },
+          "servo_ttl_rx": {
+            "direction": "I"
+          },
+          "servo_ttl_tx": {
+            "direction": "O"
+          },
+          "g1_inhibit": {
+            "direction": "I"
           }
         }
       },
@@ -1782,6 +1802,12 @@
       }
     },
     "nets": {
+      "g1_inhibit_1": {
+        "ports": [
+          "g1_inhibit",
+          "rtcs_axi_wrapper_0/g1_inhibit"
+        ]
+      },
       "irq_concat_0_dout": {
         "ports": [
           "irq_concat_0/dout",
@@ -1829,6 +1855,18 @@
         "ports": [
           "rtcs_axi_wrapper_0/irq",
           "irq_concat_0/In0"
+        ]
+      },
+      "rtcs_axi_wrapper_0_servo_ttl_tx": {
+        "ports": [
+          "rtcs_axi_wrapper_0/servo_ttl_tx",
+          "servo_ttl_tx"
+        ]
+      },
+      "servo_ttl_rx_1": {
+        "ports": [
+          "servo_ttl_rx",
+          "rtcs_axi_wrapper_0/servo_ttl_rx"
         ]
       }
     },

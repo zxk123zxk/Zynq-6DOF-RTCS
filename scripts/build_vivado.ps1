@@ -1,4 +1,4 @@
-param([switch]$Build)
+param([switch]$Build, [switch]$Ttl)
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $artifacts = Join-Path $repoRoot 'artifacts'
@@ -12,7 +12,12 @@ if ($null -eq $vivado) {
 }
 if ($null -eq $vivado) { throw 'Vivado 2023.2 vivado.bat not found' }
 $script = Join-Path $repoRoot 'src\pl\vivado\create_project.tcl'
-$modeArg = if ($Build) { @('-tclargs','build') } else { @() }
+$modeArg = @()
+if ($Build -or $Ttl) {
+  $modeArg += '-tclargs'
+  if ($Build) { $modeArg += 'build' }
+  if ($Ttl) { $modeArg += 'ttl' }
+}
 Push-Location (Join-Path $artifacts 'vivado')
 try {
   & $vivado.Source -mode batch -source $script -log (Join-Path $artifacts 'logs\vivado.log') -journal (Join-Path $artifacts 'logs\vivado.jou') @modeArg
