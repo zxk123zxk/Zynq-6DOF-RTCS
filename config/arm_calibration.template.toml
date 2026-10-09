@@ -4,16 +4,55 @@
 [arm]
 axis_count = 6
 position_unit = "TODO: servo-count or calibrated-radian"
+safe_return_pose_count = [-1, -1, -1, -1, -1, -1]
 
 [[axis]]
 name = "joint_1"
-servo_id = -1
+servo_id = 1
 direction = 0
 zero_count = -1
 safe_min = -1
 safe_max = -1
 
-# 按相同字段补充其余五个经测量的关节表。
+[[axis]]
+name = "joint_2"
+servo_id = 2
+direction = 0
+zero_count = -1
+safe_min = -1
+safe_max = -1
+
+[[axis]]
+name = "joint_3"
+servo_id = 3
+direction = 0
+zero_count = -1
+safe_min = -1
+safe_max = -1
+
+[[axis]]
+name = "joint_4"
+servo_id = 4
+direction = 0
+zero_count = -1
+safe_min = -1
+safe_max = -1
+
+[[axis]]
+name = "joint_5"
+servo_id = 5
+direction = 0
+zero_count = -1
+safe_min = -1
+safe_max = -1
+
+[[axis]]
+name = "joint_6"
+servo_id = 6
+direction = 0
+zero_count = -1
+safe_min = -1
+safe_max = -1
 
 [bus]
 baud = 1000000

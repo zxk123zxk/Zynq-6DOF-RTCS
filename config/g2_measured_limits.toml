@@ -1,0 +1,50 @@
+# 2026-10-08，用户在安装状态下逐轴实测；安全范围两端均包含。
+# 原始 count 只用于 G2 总线命令。关节方向未给出，不从范围方向推算角度符号。
+[arm]
+axis_count = 6
+position_unit = "servo_count"
+measured_reference_pose_count = [2000, 861, 3117, 2861, 2000, 1585]
+# 这不是安全回位姿态：ID 2/6 在下限，ID 3/4 在上限。
+# safe_return_pose_count 尚未实测，软件无自动回位命令。
+counts_per_90_degrees_approx = 1000
+
+[motion]
+speed_raw_max = 1500
+speed_raw_recommended = 500
+calibrate_time_raw = 10
+
+[[axis]]
+servo_id = 1
+reference_position = 2000
+safe_min = 1000
+safe_max = 3000
+
+[[axis]]
+servo_id = 2
+reference_position = 861
+safe_min = 861
+safe_max = 1500
+
+[[axis]]
+servo_id = 3
+reference_position = 3117
+safe_min = 2000
+safe_max = 3117
+
+[[axis]]
+servo_id = 4
+reference_position = 2861
+safe_min = 2000
+safe_max = 2861
+
+[[axis]]
+servo_id = 5
+reference_position = 2000
+safe_min = 0
+safe_max = 4000
+
+[[axis]]
+servo_id = 6
+reference_position = 1585
+safe_min = 1585
+safe_max = 2500

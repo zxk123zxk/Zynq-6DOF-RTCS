@@ -1,66 +1,36 @@
-# Zynq PS-PL Heterogeneous Real-Time 6-DoF Robot Controller（Zynq PS-PL 异构实时六自由度机械臂控制器）
+# Zynq-6DOF-RTCS
 
-面向柔性制造动态纠错的 Zynq PS-PL 异构六轴机械臂实时控制系统。
+AX7020（XC7Z020）PS/PL 六轴 HX-30HM 总线舵机控制工程。当前可上板硬件、Linux CLI 和 SD 镜像使用 **ABI 0x5254000C**。
 
-本仓库从一开始按 **AMD 2026 FPGA 创新设计赛道自主选题（初级组）** 的可复现交付要求组织：源码、仿真、构建脚本、上板记录、性能数据和可复用 skill 均有固定位置。目标平台是 ALINX AX7020（XC7Z020），执行器为 6 个 HX-30HM 半双工总线舵机。
+## 阶段状态
 
-## 当前状态
+| 阶段 | 状态 | 入口 |
+| --- | --- | --- |
+| G0 / G1 | 已通过基础启动和只读协议验收 | [总规划](docs/0.1hardware_bringup.md) |
+| G2 | 操作者于 2026-10-09 确认六轴联动顺利执行并结束阶段；本仓库未收到该次完整终端日志及逐项 stop/急停记录 | [G2 总结与核心文件](docs/2.G2-six-axis-calibration.md) |
+| G3 | 前期准备：固定工位点、夹爪角色和单循环数据待实测 | [G3 准备](docs/3.G3-static-closed-loop.md) |
+| G4 | 未开始：动态视觉演示 | [G4 边界](docs/4.G4-dynamic-demo.md) |
 
-旧接线下的 PL 直连 G1 单舵机只读实物验收已通过并归档；新 J20 针位、ABI `0x52540003` 的 Vivado/PetaLinux 镜像已构建但尚未上板，同时只做 G2 离线准备。G1 通过不授权实物运动：
+G2 的实际 TTL 顶层编入六轴实测闭区间，原始速度上限 1500；PL 发前检查物理禁发、限位、截止时间和总线占用。一次显式提交最多发送一帧，不自动重试。六轴广播没有 ACK；CLI 分别报告 WRITE、现场起点、反馈位移与目标误差。测得的六轴参考位置不是安全自动回位姿态。接口定义见 [ABI 12 契约](docs/g2-abi12-registers.md)。
 
-- PS：提供 Linux UIO/MMIO C++ 控制程序的最小可编译骨架及统一寄存器定义。
-- PL：提供 AXI4-Lite 控制面、时钟计数器、G1 单播 PING/READ 引擎；默认构建不导出舵机 IO，`-Ttl` 构建用 U20 RX、V15 三态 TX、W15 上拉禁发输入。G2 描述符校验模块尚未接入物理发送路径。
-- 工程：已提供 AX7Z020B 的 Vivado 2023.2 PS7/AXI Block Design、PetaLinux 2023.2 构建脚本、PS UART1 Linux 冒烟程序、验证清单、寄存器契约与阶段验收标准。
+## 核心验收代码
 
-不要把 `Material_Library/` 中的参考工程纳入本项目构建。`mycpu--` 是独立 RISC-V SoC 项目；KR260 工程面向 KR260、ROS2、USB 串口/PWM 机械臂，不能复用为 AX7020 的总线舵机控制器。
+在 WSL 中运行完整 RTL 与 CLI 离线回归：
 
-## Architecture（系统架构）
+    bash sim/run_regression_wsl.sh
 
-```text
-USB camera -> PS Linux (vision / task FSM / FK-IK / deadline)
-                | AXI4-Lite + IRQ
-                v
-PL (registers -> command FIFO -> trajectory -> safety -> servo bus)
-                | 1 Mbps half-duplex UART
-                v
-6 x HX-30HM -> position/status feedback -> PL -> PS
-```
+板端先在物理禁发状态运行 probe 和 limits；装上 J20-36/W15 到 J20-38/GND 的允许跳线后再 inventory。六轴目标只能根据本次实时位置和机械空间显式填写；同步写、越限拒绝、stop 与独立断电急停的完整顺序见 [SD 操作说明](docs/SD启动与项目迭代操作说明.md)。板端运动不由构建脚本执行。
 
-（中文：USB 摄像头数据由 PS 上的 Linux 处理视觉、任务状态机、正逆运动学和截止时间；PS 经 AXI4-Lite 与中断同 PL 通信。PL 依次完成寄存器、命令队列、轨迹、安全和舵机总线工作；再经 1 Mbps 半双工 UART 连接六个 HX-30HM 舵机，位置/状态反馈沿相反方向返回。）
+## 核心目录
 
-当前 G0 的核心改动见 [docs/0.G0-ps-pl-foundation.md](docs/0.G0-ps-pl-foundation.md)；后续阶段按 `docs/1.*` 至 `docs/4.*` 记录，统一门禁见 [docs/0.1hardware_bringup.md](docs/0.1hardware_bringup.md)。AXI 寄存器契约以 `src/pl/rtl/rtcs_pkg.sv` 和 `src/ps/linux/include/rtcs_registers.hpp` 为准。
-当前八周学习、分工和验收计划见 [docs/team_eight_week_plan.md](docs/team_eight_week_plan.md)。
+| 目录 | 内容 |
+| --- | --- |
+| [src/pl/rtl/](src/pl/rtl/rtcs_top.sv) | AXI 寄存器、G2 六轴控制器、描述符检查、舵机协议与实际顶层 |
+| [src/ps/linux/apps/](src/ps/linux/apps/rtcs_pl_g2_six.c) | G1、G2 单轴、G2 六轴 UIO CLI |
+| [config/](config/g2_measured_limits.toml) | 安装状态实测限位和参考位置 |
+| [sim/](sim/README.md) | RTL、CLI mock、完整离线回归 |
+| [scripts/](scripts/build_vivado.ps1) | Vivado、XSA 导入和 PetaLinux SD 构建 |
+| [artifacts/hw/](artifacts/hw/rtcs_system.xsa) 与 [artifacts/sd/](artifacts/sd/SHA256SUMS) | ABI 12 XSA、bitstream、SD 三件套及哈希 |
+| [docs/history/](docs/history/README-through-G2-20261009.md) 与 [artifacts/archive/](artifacts/archive/) | 旧 ABI 操作记录和归档镜像 |
 
-## Repository layout（仓库目录说明）
-
-```text
-src/pl/rtl/       Synthesizable SystemVerilog control-plane skeleton（可综合的 SystemVerilog 控制面骨架）
-src/pl/xdc/       Board-specific constraints template（板级引脚约束模板）
-src/pl/vivado/    Reproducible Vivado project script（可复现的 Vivado 工程脚本）
-src/pl/hls/       Reserved only for a later trajectory HLS experiment（仅预留给后续轨迹 HLS 实验）
-src/ps/linux/     PS Linux UIO C++ application skeleton（PS 端 Linux UIO C++ 应用骨架）
-config/            Measured arm, bus and calibration data (not guesses)（实测的机械臂、总线与标定数据，不允许猜测）
-sim/               RTL and protocol testbenches/results（RTL 与协议测试平台/结果）
-scripts/           Build and verification helpers（构建与验证辅助脚本）
-docs/              Architecture, bring-up and benchmark documentation（架构、上板和性能测试文档）
-skill/             Reusable competition deliverable（可复用的竞赛交付技能）
-```
-
-## First build milestone（首次构建里程碑）
-
-1. Windows: `powershell -ExecutionPolicy Bypass -File scripts/build_vivado.ps1 -Build`。生成物在 `artifacts/`，其中 XSA 固定为 `artifacts/hw/rtcs_system.xsa`。
-2. WSL/PetaLinux 2023.2: 使用 `scripts/petalinux/create_project.sh --import-hw <现有项目目录>` 导入新 XSA，或用 `--sync-only` 只更新 Linux 源码；再调用 `scripts/petalinux/build_sd_image.sh <现有项目目录>`。
-3. Boot the FAT32 SD image, log in at UART1 and run `rtcs-uart-smoke`.（由 FAT32 SD 卡启动，通过 UART1 登录后运行 `rtcs-uart-smoke`。）
-4. Follow [docs/0.G0-ps-pl-foundation.md](docs/0.G0-ps-pl-foundation.md) and [docs/0.1hardware_bringup.md](docs/0.1hardware_bringup.md) before enabling any servo transmit signal.（启用任何舵机发送信号前，必须完成 G0 与上板总规划要求。）
-
-The default build keeps servo TX disabled. The `-Ttl` build requires a separate physical J20-36/W15→J20-38/GND strap to enable read-only PING/READ; the independent servo power switch remains separate.（默认构建禁用舵机 TX；直连版需本地硬件允许跳线，且独立舵机电源开关不由软件代替。）
-
-旧 G1 镜像及测试证据见 [归档](artifacts/archive/g1-u20-inhibit-abi02-20261005/MANIFEST.md)。新镜像的首次上板步骤只在不接 BusLinker 时检查 `probe` 的版本及禁发跳线状态，见 [SD 操作说明](docs/SD启动与项目迭代操作说明.md)。
-
-## Tooling decision（工具链决策）
-
-Vitis HLS C++ is allowed by the contest, and can later implement an isolated numeric block such as the trapezoidal-profile kernel. It is **not** a replacement for manual RTL here: AXI integration, 1 Mbps half-duplex UART framing/arbitration, packet parser, watchdog, E-stop and deterministic multi-axis scheduling must remain reviewable RTL. The PS Linux controller is ordinary cross-compiled C++, not C++ automatically converted to all PL logic.（竞赛允许 Vitis HLS C++，后续可用于梯形轨迹内核等独立数值模块；但它**不能**替代这里的手写 RTL：AXI 集成、1 Mbps 半双工 UART 封装/仲裁、包解析器、看门狗、急停和确定性多轴调度均须保留为可审查的 RTL。PS Linux 控制器是普通交叉编译 C++，不会自动转换为全部 PL 逻辑。）
-
-## License（许可证）
-
-License selection is intentionally deferred until external reference code and competition submission terms have been reviewed. New project code should remain independently authored.（许可证选择刻意延后，待审查外部参考代码和竞赛提交条款后再决定；新增项目代码应保持独立创作。）
+当前构建使用 Vivado 2023.2 与 PetaLinux 2023.2。默认构建不导出舵机 IO；实际 TTL 镜像须用 Vivado 脚本的 Build/Ttl 选项，并保留独立舵机电源与物理禁发。G3 的轨迹、FIFO、IRQ 和 100 次静态抓放尚未实现，不能视作本版能力。

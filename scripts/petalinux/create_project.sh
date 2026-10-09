@@ -50,6 +50,12 @@ install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-apps/rtcs-pl-g
   "$project_dir/project-spec/meta-user/recipes-apps/rtcs-pl-g1/rtcs-pl-g1.bb"
 install -D -m 0644 "$repo_root/src/ps/linux/apps/rtcs_pl_g1.c" \
   "$project_dir/project-spec/meta-user/recipes-apps/rtcs-pl-g1/files/rtcs_pl_g1.c"
+install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-apps/rtcs-pl-g2/rtcs-pl-g2.bb" \
+  "$project_dir/project-spec/meta-user/recipes-apps/rtcs-pl-g2/rtcs-pl-g2.bb"
+install -D -m 0644 "$repo_root/src/ps/linux/apps/rtcs_pl_g2.c" \
+  "$project_dir/project-spec/meta-user/recipes-apps/rtcs-pl-g2/files/rtcs_pl_g2.c"
+install -D -m 0644 "$repo_root/src/ps/linux/apps/rtcs_pl_g2_six.c" \
+  "$project_dir/project-spec/meta-user/recipes-apps/rtcs-pl-g2/files/rtcs_pl_g2_six.c"
 install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-bsp/device-tree/files/system-user.dtsi" \
   "$project_dir/project-spec/meta-user/recipes-bsp/device-tree/files/system-user.dtsi"
 install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-kernel/linux/linux-xlnx/usbserial.cfg" \
@@ -67,19 +73,19 @@ rootfs_config="$project_dir/project-spec/meta-user/conf/user-rootfsconfig"
 mkdir -p "$(dirname "$rootfs_config")"
 touch "$rootfs_config"
 # user-rootfsconfig defines menu entries; selected values live in rootfs_config.
-sed -i 's/\r$//; s/^\(CONFIG_rtcs-\(uart-smoke\|uart-loopback\|buslinker-g1\|pl-g1\)\)=y$/\1/' "$rootfs_config"
-for package in rtcs-uart-smoke rtcs-uart-loopback rtcs-buslinker-g1 rtcs-pl-g1; do
+sed -i 's/\r$//; s/^\(CONFIG_rtcs-\(uart-smoke\|uart-loopback\|buslinker-g1\|pl-g1\|pl-g2\)\)=y$/\1/' "$rootfs_config"
+for package in rtcs-uart-smoke rtcs-uart-loopback rtcs-buslinker-g1 rtcs-pl-g1 rtcs-pl-g2; do
   grep -qxF "CONFIG_$package" "$rootfs_config" || printf 'CONFIG_%s\n' "$package" >> "$rootfs_config"
 done
-awk '/^CONFIG_rtcs-(uart-smoke|uart-loopback|buslinker-g1|pl-g1)$/ { if (seen[$0]++) next } { print }' "$rootfs_config" > "$rootfs_config.tmp"
+awk '/^CONFIG_rtcs-(uart-smoke|uart-loopback|buslinker-g1|pl-g1|pl-g2)$/ { if (seen[$0]++) next } { print }' "$rootfs_config" > "$rootfs_config.tmp"
 mv "$rootfs_config.tmp" "$rootfs_config"
 while IFS= read -r -d '' generated_kconfig; do
-  sed -i 's/\r$//; s/^\(CONFIG_rtcs-\(uart-smoke\|uart-loopback\|buslinker-g1\|pl-g1\)\)=y$/\1/' "$generated_kconfig"
+  sed -i 's/\r$//; s/^\(CONFIG_rtcs-\(uart-smoke\|uart-loopback\|buslinker-g1\|pl-g1\|pl-g2\)\)=y$/\1/' "$generated_kconfig"
 done < <(find "$project_dir" -name Kconfig.user -type f -print0)
 if [[ $created == 1 ]]; then
   selections="$project_dir/project-spec/configs/rootfs_config"
   touch "$selections"
-  for package in rtcs-uart-smoke rtcs-uart-loopback rtcs-buslinker-g1 rtcs-pl-g1; do
+  for package in rtcs-uart-smoke rtcs-uart-loopback rtcs-buslinker-g1 rtcs-pl-g1 rtcs-pl-g2; do
     grep -qxF "CONFIG_$package=y" "$selections" || printf 'CONFIG_%s=y\n' "$package" >> "$selections"
   done
 fi
@@ -88,4 +94,6 @@ mkdir -p "$(dirname "$selections")"
 touch "$selections"
 sed -i '/^# CONFIG_rtcs-pl-g1 is not set$/d' "$selections"
 grep -qxF 'CONFIG_rtcs-pl-g1=y' "$selections" || printf 'CONFIG_rtcs-pl-g1=y\n' >> "$selections"
+sed -i '/^# CONFIG_rtcs-pl-g2 is not set$/d' "$selections"
+grep -qxF 'CONFIG_rtcs-pl-g2=y' "$selections" || printf 'CONFIG_rtcs-pl-g2=y\n' >> "$selections"
 echo "PetaLinux sync OK ($mode): $project_dir"

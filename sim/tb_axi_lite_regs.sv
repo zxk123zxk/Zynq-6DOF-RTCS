@@ -42,24 +42,51 @@ module tb_axi_lite_regs;
   logic [31:0] g1_fault = 32'h0000_0003;
   logic [7:0] g1_id, g1_op;
   logic g1_start, g1_clear;
+  logic [31:0] g2_id, g2_expect, g2_target, g2_speed_time;
+  logic [63:0] g2_deadline;
+  logic g2_commit, g2_cancel;
+  logic [31:0] g2_status = 32'h0000_000a;
+  logic [31:0] g2_fault = 32'h0000_0007;
+  logic [31:0] g2_feedback = 32'h0000_07cb;
+  logic [7:0] six_log_index;
+  logic [7:0] limit_id;
+  logic [5:0][15:0] six_tolerance;
+  logic [7:0] six_observe;
   integer start_count = 0, clear_count = 0;
+  integer g2_commit_count = 0, g2_cancel_count = 0;
   always @(posedge clk) if (rst_n) begin
     if (g1_start) start_count = start_count + 1;
     if (g1_clear) clear_count = clear_count + 1;
+    if (g2_commit) g2_commit_count = g2_commit_count + 1;
+    if (g2_cancel) g2_cancel_count = g2_cancel_count + 1;
   end
 
-  axi_lite_regs #(.AXI_ADDR_WIDTH(8), .AXIS_COUNT(AXIS_COUNT)) dut (
+  axi_lite_regs #(.AXI_ADDR_WIDTH(9), .AXIS_COUNT(AXIS_COUNT)) dut (
     .aclk(clk), .aresetn(rst_n),
-    .saxi_awaddr(s_axi_awaddr[7:0]), .saxi_awvalid(s_axi_awvalid), .saxi_awready(s_axi_awready),
-    .saxi_araddr(s_axi_araddr[7:0]), .saxi_arvalid(s_axi_arvalid), .saxi_arready(s_axi_arready),
+    .saxi_awaddr(s_axi_awaddr[8:0]), .saxi_awvalid(s_axi_awvalid), .saxi_awready(s_axi_awready),
+    .saxi_araddr(s_axi_araddr[8:0]), .saxi_arvalid(s_axi_arvalid), .saxi_arready(s_axi_arready),
     .saxi_wready(s_axi_wready), .saxi_wvalid(s_axi_wvalid), .saxi_wdata(s_axi_wdata), .saxi_wstrb(s_axi_wstrb),
     .saxi_rready(s_axi_rready), .saxi_rvalid(s_axi_rvalid), .saxi_rdata(s_axi_rdata), .saxi_rresp(s_axi_rresp),
     .saxi_bready(s_axi_bready), .saxi_bvalid(s_axi_bvalid), .saxi_bresp(s_axi_bresp),
     .hw_ticks(hw_ticks), .status(status), .irq_status(irq_status),
     .g1_status(g1_status), .g1_result(g1_result), .g1_fault(g1_fault),
+    .g2_status(g2_status), .g2_fault(g2_fault), .g2_feedback(g2_feedback),
+    .g2_start(32'd871),
+    .g2_six_log_count(32'h0003_0003),
+    .g2_six_log_data(32'h1000_0375),
+    .g2_six_log_elapsed(32'd5000000),
+    .g2_six_start(32'd871), .g2_six_result(32'h3f3f3f3f),
+    .g2_six_diag(32'h0000_0103),
+    .g2_limit_min(32'd861), .g2_limit_max(32'd1500),
+    .g2_limit_home(32'd861), .g2_limit_speed_max(32'd1500),
     .control(control), .command(command), .target(target), .profile_speed(profile_speed),
     .profile_accel(profile_accel), .deadline(deadline), .servo_config(servo_config),
-    .g1_id(g1_id), .g1_op(g1_op), .g1_start(g1_start), .g1_clear(g1_clear)
+    .g1_id(g1_id), .g1_op(g1_op), .g1_start(g1_start), .g1_clear(g1_clear),
+    .g2_id(g2_id), .g2_expect(g2_expect), .g2_target(g2_target),
+    .g2_speed_time(g2_speed_time), .g2_deadline(g2_deadline),
+    .g2_commit(g2_commit), .g2_cancel(g2_cancel),
+    .g2_six_log_index(six_log_index), .g2_limit_id(limit_id),
+    .g2_six_tolerance(six_tolerance), .g2_six_observe_100ms(six_observe)
   );
 
   always #5 clk = ~clk;
@@ -283,6 +310,65 @@ module tb_axi_lite_regs;
     require(start_count == 1, "full command must pulse exactly once");
     write_same_cycle(REG_G1_CMD, 32'd2, 4'hf);
     require(clear_count == 1, "clear command must pulse exactly once");
+
+    write_same_cycle(REG_G2_ID, 1, 4'hf);
+    write_same_cycle(REG_G2_EXPECT, 1995, 4'hf);
+    write_same_cycle(REG_G2_TARGET, 2005, 4'hf);
+    write_same_cycle(REG_G2_SPEED_TIME, 50, 4'hf);
+    write_same_cycle(REG_G2_DEADLINE_LO, 32'h1234_5678, 4'hf);
+    write_same_cycle(REG_G2_DEADLINE_HI, 32'h9abc_def0, 4'hf);
+    read_register(REG_G2_ID, readback); require(readback == 1 && g2_id == 1, "G2 ID mismatch");
+    read_register(REG_G2_EXPECT, readback); require(readback == 1995 && g2_expect == 1995, "G2 expect mismatch");
+    read_register(REG_G2_TARGET, readback); require(readback == 2005 && g2_target == 2005, "G2 target mismatch");
+    read_register(REG_G2_SPEED_TIME, readback); require(readback == 50 && g2_speed_time == 50, "G2 speed/time mismatch");
+    require(g2_deadline == 64'h9abc_def0_1234_5678, "G2 deadline mismatch");
+    read_register(REG_G2_STATUS, readback); require(readback == g2_status, "G2 status mismatch");
+    read_register(REG_G2_FAULT, readback); require(readback == g2_fault, "G2 fault mismatch");
+    read_register(REG_G2_FEEDBACK, readback); require(readback == g2_feedback, "G2 feedback mismatch");
+    write_same_cycle(REG_G2_CMD, 32'h4732_0001, 4'b0001);
+    require(g2_commit_count == 0, "partial G2 commit was accepted");
+    write_same_cycle(REG_G2_CMD, 32'h4732_0001, 4'hf);
+    require(g2_commit_count == 1, "G2 commit must pulse once");
+    write_same_cycle(REG_G2_CMD, 32'h4732_0002, 4'hf);
+    require(g2_cancel_count == 1, "G2 cancel must pulse once");
+
+    read_register(REG_G2_SIX_LOG_COUNT, readback);
+    require(readback == 32'h0003_0003, "calibration log metadata mismatch");
+    write_same_cycle(REG_G2_SIX_LOG_INDEX, 32'd127, 4'hf);
+    require(six_log_index == 127, "calibration log index write mismatch");
+    read_register(REG_G2_SIX_LOG_DATA, readback);
+    require(readback == 32'h1000_0375, "calibration log data mismatch");
+    read_register(REG_G2_SIX_LOG_ELAPSED, readback);
+    require(readback == 32'd5000000, "calibration log elapsed mismatch");
+    write_same_cycle(REG_G2_LIMIT_ID, 32'd2, 4'hf);
+    require(limit_id == 2, "limit axis selector mismatch");
+    read_register(REG_G2_LIMIT_ID, readback);
+    require(readback == 2, "limit selector readback mismatch");
+    read_register(REG_G2_LIMIT_MIN, readback);
+    require(readback == 861, "limit minimum mismatch");
+    read_register(REG_G2_LIMIT_MAX, readback);
+    require(readback == 1500, "limit maximum mismatch");
+    read_register(REG_G2_LIMIT_REFERENCE, readback);
+    require(readback == 861, "limit reference mismatch");
+    read_register(REG_G2_LIMIT_SPEED_MAX, readback);
+    require(readback == 1500, "limit speed cap mismatch");
+    write_same_cycle(REG_G2_SIX_TOLERANCE, 32'd42, 4'hf);
+    require(six_tolerance[1] == 42 && six_tolerance[0] == 30,
+            "indexed tolerance write mismatch");
+    read_register(REG_G2_SIX_TOLERANCE, readback);
+    require(readback == 42, "indexed tolerance read mismatch");
+    write_same_cycle(REG_G2_SIX_OBSERVE, 32'd60, 4'hf);
+    require(six_observe == 60, "observation snapshot register mismatch");
+    read_register(REG_G2_SIX_START, readback);
+    require(readback == 871, "indexed live start read mismatch");
+    read_register(REG_G2_SIX_RESULT, readback);
+    require(readback == 32'h3f3f3f3f, "result mask mismatch");
+    read_register(REG_G2_SIX_DIAG, readback);
+    require(readback == 32'h0000_0103, "stage/raw-fault mismatch");
+    read_register(REG_G2_START, readback);
+    require(readback == 871, "single-axis live start mismatch");
+    read_register(REG_ID_VERSION, readback);
+    require(readback == ID_VERSION, "new address aliased ABI register");
 
     $display("TB_AXI_LITE_REGS_PASS");
     $finish;

@@ -53,17 +53,45 @@ module tb_rtcs_g1_ttl_top;
   initial begin
     repeat (5) @(negedge clk); rst_n = 1;
     read32(32'h00, value);
-    if (value !== 32'h5254_0003) $fatal(1, "new pinout ABI not visible");
+    if (value !== 32'h5254_000c) $fatal(1, "new pinout ABI not visible");
     read32(32'h5c, value);
     if (!value[3]) $fatal(1, "unstrapped TX not disabled");
+    read32(32'hd8, value);
+    if (value != 32'h3f) $fatal(1, "installed calibration mask missing");
+    for (int id=1;id<=6;id++) begin
+      write32(32'hec,32'(id));
+      read32(32'hf0,value);
+      if (value != g2_board_limits_pkg::SAFE_MIN[id-1])
+        $fatal(1,"wrong compiled minimum id=%0d",id);
+      read32(32'hf4,value);
+      if (value != g2_board_limits_pkg::SAFE_MAX[id-1])
+        $fatal(1,"wrong compiled maximum id=%0d",id);
+      read32(32'hf8,value);
+      if (value != g2_board_limits_pkg::REFERENCE[id-1])
+        $fatal(1,"wrong compiled reference id=%0d",id);
+      read32(32'hfc,value);
+      if (value != 1500) $fatal(1,"wrong speed cap id=%0d",id);
+    end
     write32(32'h50, 1); write32(32'h54, 1); write32(32'h58, 1);
     repeat (20) @(negedge clk);
     read32(32'h5c, value);
     if (!value[3] || value[0] || tx_seen) $fatal(1, "unstrapped command transmitted");
+    write32(32'h80, 32'h4732_0001);
+    read32(32'h84, value);
+    if (value[3:1] != 3'b111 || tx_seen) $fatal(1, "unstrapped G2 commit not rejected");
+    read32(32'h88, value);
+    if (value != 1) $fatal(1, "unstrapped G2 fault code mismatch");
 
     inhibit = 0;
     read32(32'h5c, value);
     if (value[3]) $fatal(1, "strapped TX still disabled");
+    write32(32'h68, 7); // only ID 1..6 may move
+    write32(32'h80, 32'h4732_0001);
+    read32(32'h84, value);
+    if (!value[1] || !value[2] || value[4] || tx_seen)
+      $fatal(1, "invalid G2 descriptor reached physical TX");
+    read32(32'h88, value);
+    if (value != 3) $fatal(1, "invalid G2 descriptor fault mismatch");
     write32(32'h50, 1); write32(32'h54, 1); write32(32'h58, 1);
     repeat (150) @(negedge clk);
     if (!tx_seen) $fatal(1, "strapped PING did not reach pin");

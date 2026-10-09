@@ -8,10 +8,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/file.h>
 #include <time.h>
 #include <unistd.h>
 
-enum { REGION_BYTES = 0x10000, ID_VERSION = 0x52540003,
+enum { REGION_BYTES = 0x10000, ID_VERSION = 0x5254000c,
        REG_ID = 0x00, REG_G1_ID = 0x50, REG_G1_OP = 0x54,
        REG_G1_CMD = 0x58, REG_G1_STATUS = 0x5c,
        REG_G1_RESULT = 0x60, REG_G1_FAULT = 0x64 };
@@ -60,6 +61,9 @@ int main(int argc, char **argv) {
   }
   fd = open(uio, O_RDWR | O_SYNC);
   if (fd < 0) { perror("ERR open_uio"); return EXIT_FAILURE; }
+  if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+    perror("ERR bus_locked"); close(fd); return EXIT_FAILURE;
+  }
   mapping = mmap(NULL, REGION_BYTES, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   if (mapping == MAP_FAILED) { perror("ERR mmap_uio"); close(fd); return EXIT_FAILURE; }
   regs = (volatile uint32_t *)mapping;

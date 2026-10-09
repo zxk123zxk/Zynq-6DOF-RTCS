@@ -7,7 +7,7 @@ if [[ $# -ne 1 ]]; then
 fi
 
 : "${PETALINUX:?Source the PetaLinux 2023.2 settings script first.}"
-for tool in petalinux-build petalinux-package mkimage sha256sum; do
+for tool in petalinux-build petalinux-package mkimage sha256sum cpio; do
   command -v "$tool" >/dev/null || { echo "Missing tool: $tool" >&2; exit 69; }
 done
 project_dir=$(realpath "$1")
@@ -37,6 +37,15 @@ if ! grep -qx 'CONFIG_USB_SERIAL_CH341=y' "${kernel_configs[0]}"; then
 fi
 for file in zynq_fsbl.elf system.bit u-boot.elf image.ub; do
   [[ -s "$project_dir/images/linux/$file" ]] || { echo "Missing build output: $file" >&2; exit 66; }
+done
+rootfs_cpio="$project_dir/images/linux/rootfs.cpio"
+[[ -s "$rootfs_cpio" ]] || { echo 'Missing rootfs.cpio' >&2; exit 66; }
+rootfs_listing=$(cpio -it < "$rootfs_cpio" 2>/dev/null)
+for cli in rtcs-pl-g1 rtcs-pl-g2 rtcs-pl-g2-six; do
+  if ! grep -qx "usr/bin/$cli" <<< "$rootfs_listing"; then
+    echo "Missing $cli in rootfs.cpio; refusing to package SD image" >&2
+    exit 65
+  fi
 done
 if ! cmp -s "$project_dir/images/linux/system.bit" "$repo_root/artifacts/hw/rtcs_system.bit"; then
   echo 'PetaLinux system.bit differs from artifacts/hw/rtcs_system.bit; refusing to package a stale bitstream' >&2

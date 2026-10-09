@@ -59,7 +59,7 @@ module tb_rtcs_g1_safe_top;
     repeat (5) @(negedge clk);
     rst_n = 1;
     read32(32'h00, value);
-    if (value != 32'h5254_0003) $fatal(1, "wrong G1 ABI");
+    if (value != 32'h5254_000c) $fatal(1, "wrong G1 ABI");
     read32(32'h5c, value);
     if (value[3] !== 1'b1) $fatal(1, "physical-disabled status missing");
 
@@ -67,9 +67,9 @@ module tb_rtcs_g1_safe_top;
     write32(32'h54, 1); // PING only
     write32(32'h58, 1); // atomic start
     repeat (150) @(negedge clk);
-    if (!internal_tx_seen) $fatal(1, "G1 internal UART did not start");
+    if (internal_tx_seen) $fatal(1, "safe wrapper unexpectedly started UART");
     read32(32'h5c, value);
-    if (value[3] !== 1'b1 || value[0] !== 1'b1)
+    if (value[3] !== 1'b1 || value[0] !== 1'b0)
       $fatal(1, "safe G1 request status mismatch");
     write32(32'h58, 2); // abort without waiting for timeout
     repeat (5) @(negedge clk);

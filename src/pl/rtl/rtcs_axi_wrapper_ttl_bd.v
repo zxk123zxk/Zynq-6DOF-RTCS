@@ -16,7 +16,14 @@ module rtcs_axi_wrapper_ttl_bd (
   wire tx_data;
   wire tx_enable;
 
-  rtcs_top #(.G1_TTL_PORTS(1'b1)) u_rtcs_top (
+  rtcs_top #(
+    .G1_TTL_PORTS(1'b1),
+    .G2_CALIBRATED_MASK(6'h3f),
+    .G2_SAFE_MIN({32'd1585,32'd0,32'd2000,32'd2000,32'd861,32'd1000}),
+    .G2_SAFE_MAX({32'd2500,32'd4000,32'd2861,32'd3117,32'd1500,32'd3000}),
+    .G2_REFERENCE({32'd1585,32'd2000,32'd2861,32'd3117,32'd861,32'd2000}),
+    .G2_SPEED_MAX_RAW(16'd1500)
+  ) u_rtcs_top (
     .s_axi_aclk(s_axi_aclk), .s_axi_aresetn(s_axi_aresetn),
     .s_axi_awaddr(s_axi_awaddr), .s_axi_awvalid(s_axi_awvalid), .s_axi_awready(s_axi_awready),
     .s_axi_wdata(s_axi_wdata), .s_axi_wstrb(s_axi_wstrb), .s_axi_wvalid(s_axi_wvalid), .s_axi_wready(s_axi_wready),

@@ -1,0 +1,30 @@
+petalinux-rtcs:~$ sudo rtcs-pl-g2 --uio /dev/uio0 move --id 1 --target 2000 --speed-raw 1500 --time-raw 10 --execute
+RTCS_PL_G2 board=AX7Z020B abi=0x52540008 physical_tx=ENABLED
+commit id=1 target=2000 speed_raw=1500 time_raw=10 torque_toggle=0x28:1 command_deadline_ticks=185586899723
+sample=1 position_raw=2989 servo_error=0 elapsed_ms=51
+sample=2 position_raw=2953 servo_error=0 elapsed_ms=102
+sample=3 position_raw=2901 servo_error=0 elapsed_ms=152
+sample=4 position_raw=2838 servo_error=0 elapsed_ms=203
+sample=5 position_raw=2769 servo_error=0 elapsed_ms=254
+sample=6 position_raw=2697 servo_error=0 elapsed_ms=305
+sample=7 position_raw=2620 servo_error=0 elapsed_ms=356
+sample=8 position_raw=2546 servo_error=0 elapsed_ms=407
+sample=9 position_raw=2473 servo_error=0 elapsed_ms=452
+sample=10 position_raw=2401 servo_error=0 elapsed_ms=503
+sample=11 position_raw=2326 servo_error=0 elapsed_ms=554
+sample=12 position_raw=2249 servo_error=0 elapsed_ms=605
+sample=13 position_raw=2171 servo_error=0 elapsed_ms=656
+sample=14 position_raw=2102 servo_error=0 elapsed_ms=707
+sample=15 position_raw=2059 servo_error=0 elapsed_ms=758
+sample=16 position_raw=2036 servo_error=0 elapsed_ms=803
+sample=17 position_raw=2023 servo_error=0 elapsed_ms=854
+sample=18 position_raw=2017 servo_error=0 elapsed_ms=905
+sample=19 position_raw=2013 servo_error=0 elapsed_ms=956
+sample=20 position_raw=2011 servo_error=0 elapsed_ms=1007
+sample=21 position_raw=2010 servo_error=0 elapsed_ms=1058
+RTCS_PL_G2_OK id=1 target=2000 position_raw=2010 final_error=10 samples=21 elapsed_ms=1058 timing=WITHIN_2S
+
+Independent later READ_POSITION (as provided by user):
+RTCS_PL_G1 board=AX7Z020B id_version=0x52540008 status=0x00000002 physical_tx=ENABLED
+position_raw=2001
+RTCS_PL_G1_OK id=1 command=READ_POSITION

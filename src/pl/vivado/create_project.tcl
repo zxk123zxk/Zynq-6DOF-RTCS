@@ -35,7 +35,7 @@ source "$script_dir/create_rtcs_system.tcl"
 
 puts "已创建 AX7Z020B PS7/AXI 基础工程：FCLK0=100 MHz，RTCS=0x43C00000/64 KiB。"
 if {$g1_ttl_ports} {
-  puts "G1 TTL build: J20 TX=V15 RX=U20, physical inhibit W15 pulled high by default."
+  puts "G1 TTL build: J20 TX=U20 RX=V15, physical inhibit W15 pulled high by default."
 } else {
   puts "该版本不导出舵机 IO，servo_tx_en 保持硬性禁用。"
 }
@@ -54,7 +54,7 @@ if {[lsearch -exact $argv build] >= 0} {
   }
   open_run impl_1
   if {$g1_ttl_ports} {
-    foreach {port expected_pin} {servo_ttl_tx V15 servo_ttl_rx U20 g1_inhibit W15} {
+    foreach {port expected_pin} {servo_ttl_tx U20 servo_ttl_rx V15 g1_inhibit W15} {
       set actual_pin [get_property PACKAGE_PIN [get_ports $port]]
       if {$actual_pin ne $expected_pin} {
         error "G1 TTL port $port is on $actual_pin, expected $expected_pin"
@@ -71,9 +71,18 @@ if {[lsearch -exact $argv build] >= 0} {
     if {![string is true -strict [get_property PULLUP [get_ports g1_inhibit]]]} {
       error "G1 inhibit W15 must have an enabled internal PULLUP"
     }
-    puts "RTCS_G1_TTL_IO_OK tx=V15 rx=U20 inhibit=W15 pullup=TRUE obuft=[llength $tx_tristates]"
+    if {![string is true -strict [get_property PULLUP [get_ports servo_ttl_rx]]]} {
+      error "G1 RX V15 must have an enabled internal PULLUP"
+    }
+    puts "RTCS_G1_TTL_IO_OK tx=U20 rx=V15 inhibit=W15 pullup=TRUE obuft=[llength $tx_tristates]"
   }
   report_timing_summary -file [file join $reports_dir timing_summary.rpt]
+  foreach {kind delay_type} {setup max hold min} {
+    set worst_path [lindex [get_timing_paths -delay_type $delay_type -max_paths 1] 0]
+    if {$worst_path eq ""} { error "No $kind timing path was reported" }
+    set slack [get_property SLACK $worst_path]
+    if {$slack < 0.0} { error "$kind timing failed: worst slack $slack ns" }
+  }
   report_utilization -file [file join $reports_dir utilization.rpt]
   report_methodology -file [file join $reports_dir methodology.rpt]
   set bit_file [file join $project_dir "${project_name}.runs" impl_1 rtcs_system_wrapper.bit]
