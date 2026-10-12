@@ -1,91 +1,50 @@
 # Verification plan（验证计划）
 
-Add simulation artifacts in phases; keep testbenches independent from board-specific pin constraints.（分阶段加入仿真产物；测试平台必须独立于板级特定的引脚约束。）
+测试平台必须独立于板级引脚约束；**仿真通过不等于实物通过**，只有波形不能宣称已完成真实舵机验证。
 
-1. `tb_axi_lite_regs`: reset, read ID/version, partial-write behavior, all six target registers, read/write response handshake.（复位、读取 ID/版本、部分写行为、全部六个目标寄存器及读/写应答握手。）
-2. `tb_hx30hm_protocol`: HX-30HM PING/READ and the ABI 08 torque+position / torque-off checksum golden vectors, including nonzero raw time. It validates only packet arithmetic, never physical output.（校验报文运算及非零原始时间字段，不验证物理输出。）
-3. `tb_half_duplex_phy`: 1 Mbps 8N1 timing, direction turnaround and no-drive-after-E-stop assertions.（1 Mbps、8N1 时序、收发方向切换，以及急停后不得驱动总线的断言。）
-4. `tb_motion_safety`: simultaneous six-axis descriptor commit, deadline miss, watchdog, limit and feedback-timeout behavior.（同时提交六轴描述符、截止超期、看门狗、限位和反馈超时行为。）
+## 唯一回归入口
 
-## AXI4-Lite register regression（AXI4-Lite 寄存器回归）
+在 WSL 中于仓库根目录运行：
 
-Run the following command from the repository root with Icarus Verilog installed. The G1 and AXI runners use `iverilog -g2012` and `vvp`; their build products are written below ignored `build/sim/`.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File sim/run_axi_lite_regs.ps1
-powershell -ExecutionPolicy Bypass -File sim/run_hx30hm_protocol.ps1
-powershell -ExecutionPolicy Bypass -File sim/run_servo_rx_only.ps1
-powershell -ExecutionPolicy Bypass -File sim/run_hx30hm_g1_engine.ps1
-powershell -ExecutionPolicy Bypass -File sim/run_rtcs_g1_safe_top.ps1
-powershell -ExecutionPolicy Bypass -File sim/run_rtcs_g1_ttl_top.ps1
-powershell -ExecutionPolicy Bypass -File sim/run_g2_descriptor_guard.ps1
-powershell -ExecutionPolicy Bypass -File sim/run_rtcs_g2_one_servo.ps1
+```bash
+bash sim/run_regression_wsl.sh
 ```
 
-`tb_axi_lite_regs.sv` verifies synchronous reset, read-only register reads, AW-first/W-first/same-cycle writes, held B/R responses, non-contiguous byte writes, and independent readback of all six target registers. A successful run ends with `TB_AXI_LITE_REGS_PASS`.
+通过时输出 `RTCS_WSL_REGRESSION_PASS`（Verilator 5.008，`--binary --timing`）。它串起 AXI 寄存器、HX-30HM 协议、G1 安全/ TTL 顶层、六轴描述符与控制器、单轴连接路径，以及三个 CLI mock 守护。**任何 RTL 或 CLI 改动后必须重跑并 PASS 才能交付。**
 
-（中文：`tb_axi_lite_regs.sv` 覆盖同步复位、只读寄存器、AW 先到/W 先到/同周期写、保持的 B/R 应答、非连续字节写以及六轴目标寄存器独立读回；成功时输出 `TB_AXI_LITE_REGS_PASS`。）
+单独的守护脚本（调试时用）：
 
-Every test should be executable from a script in this directory and should state the simulator/version used. Do not claim a waveform-only pass as real servo validation.（每项测试均应能由本目录脚本执行并注明所用仿真器/版本；只有波形通过不能宣称已完成真实舵机验证。）
+| 脚本 | 作用 |
+| --- | --- |
+| `sim/run_axi_lite_regs.ps1` | AXI4-Lite 寄存器组（Icarus 备用路径） |
+| `sim/run_hx30hm_protocol.ps1` | HX-30HM 报文运算与校验和黄金向量 |
+| `sim/run_hx30hm_g1_engine.ps1` | 1 Mbps PING/READ、原子扭矩+位置帧、卸力帧、超时 |
+| `sim/run_rtcs_g1_safe_top.ps1` | 无 TTL 顶层必须忽略 G1 命令且保持 `servo_tx_en=0` |
+| `sim/run_rtcs_g1_ttl_top.ps1` | 默认禁发、跳线后才允许 TX、拆除立即中止 |
+| `sim/run_g2_descriptor_guard.ps1` | 六轴描述符原子捕获与非法/未标定/越限拒绝 |
+| `sim/run_rtcs_g2_one_servo.ps1` | 单轴连接路径：禁发、越限、帧字节、±15 反馈边界 |
+| `bash sim/run_pl_g1_cli_abi.sh` | CLI 在 ABI 02 上拒绝写寄存器，ABI 08 允许只读 probe |
+| `bash sim/run_pl_g2_cli_guard.sh` | 单轴 CLI 的 ABI/字段宽度/禁发检查与打包 |
+| `bash sim/run_pl_g2_six_cli_guard.sh` | 六轴 CLI：`move-six`/`stop`/`diagnose` 的 mock 校验 |
+| `bash sim/run_g2_one_servo.sh` | 连接态单轴 G2 路径（WSL Verilator） |
+| `bash sim/run_buslinker_g1_dump_guard.sh` | BusLinker `dump`/`sweep` 严格只读：逐帧断言只发 READ |
+| `bash sim/run_g3_offline_plan_guard.sh` | G3 离线任务表门禁（**归档轨**，见下） |
 
-`sim/tb_hx30hm_g1_engine.sv` checks 1 Mbps PING/READ, the ABI 08
-15-byte torque+position motion frame, the 8-byte torque-off frame, valid
-replies, invalid ID, the removed position-only opcode, and missing-response
-timeout without any servo connection.
-`sim/tb_rtcs_g1_safe_top.sv` drives G1 commands through AXI and checks that
-the no-TTL wrapper ignores them and keeps `servo_tx_en=0`, `servo_tx=1`.
-This does not validate electrical levels or real servo replies.
-`sim/tb_rtcs_g1_ttl_top.sv` checks default inhibit, physical TX activation
-only after the separate strap is grounded, immediate TX release on inhibit,
-transaction abort and no automatic resume. Real servo replies remain an
-on-board test described in the SD guide.
-`sim/tb_g2_descriptor_guard.sv` checks atomic six-axis capture and rejection
-of uncalibrated, out-of-range, faulted, inhibited and expired descriptors.
-The six-axis guard is not wired to the physical servo UART. In WSL, run
-`bash sim/run_pl_g1_cli_abi.sh` to verify the Linux CLI rejects ABI 02 before
-register writes and accepts ABI 08 for a read-only `probe`.
+## 当前覆盖范围
 
-The connected G2 path is covered by `bash sim/run_g2_one_servo.sh` in WSL
-(Verilator 5.008 with `--binary --timing`). The Windows Icarus runner remains
-available, but the installed Icarus executable currently exits with access
-violation `0xC0000005` during package compilation; the verified regression gate
-is `bash sim/run_regression_wsl.sh`. The G2 test checks physical inhibit, ID/field-width/deadline
-rejection, the G1-path whitelist (position-writing opcodes fault 13), an arbitrary
-old EXPECT field and distant start position, atomic snapshot, the exact ABI 08
-torque+position frame (`0x28=1` plus variable target/time/speed), repeated explicit
-submissions, ±15 feedback boundary, delayed arrival as success, bounded observation
-timeout without automatic retry, physical inhibit after launch, and torque release.
-It never connects to a real servo. Inhibit truncates a frame on purpose, so the
-testbench re-synchronises its byte observer before the next command.
-`bash sim/run_pl_g2_cli_guard.sh` compiles the Linux CLI and uses mock UIO
-mappings to confirm ABI/width checks and physical inhibit reject before `G2_CMD`,
-while distinct targets and raw fields are packed correctly. It also checks the
-CLI's independent final-error and delayed-arrival reporting.
+- **AXI4-Lite**：同步复位、只读寄存器、AW 先到/W 先到/同周期写、保持的 B/R 应答、非连续字节写、六轴目标寄存器独立读回、0x100 以上地址不混叠。
+- **HX-30HM 协议**：1 Mbps 8N1 PING/READ、原子 `OP_TORQUE_MOVE`（`0x28=1` + 目标/时间/速度，长度 0x0B）、`OP_TORQUE_OFF`、完整 62 字节六轴广播帧（每轴 `0x28=1`）与校验和；广播完成不等应答。
+- **G1 顶层**：默认物理禁发；只有禁发跳线接地才允许 TX；事务中止后不自动恢复；G1 白名单对任何能写位置的操作码报 `fault=13` 且不发字节。
+- **G2 六轴**：未标定掩码为零时不发 WRITE、越限拒绝、同步提交、故障后剩余轴有界只读补采、连续三轮全轴到位判定、5 秒观察窗口超时**不重发**、`stop` 先 READ 再广播保持。
+- **G2 单轴（ABI 0E 语义）**：先 WRITE 后反馈、正常 ACK、目标已在误差带内、超时不自动重发、故障 ID/阶段/`DIAG[23:16]` 锁存检查。
+- **board limits**：用实际六轴综合常量逐轴覆盖最小值/最大值及相邻越界值，并检查速度原始字段 0/500/1500/1501。
 
-For the current WSL toolchain, `bash sim/run_regression_wsl.sh` runs the AXI,
-protocol, G1, six-axis offline guard, connected G2, and both CLI mock suites.
-`bash sim/run_g3_offline_plan_guard.sh` additionally pins the G3 offline gate in
-`scripts/g3_offline_plan.py`: the empty station template must be rejected, a plan
-without `id5_fault_cleared_by_operator` must be rejected, an ID 5 target outside
-the measured range must be rejected (which also proves `safe_min`/`safe_max` were
-actually read, not skipped), a confirmed plan must pass `--step standby` and emit
-only one `MANUAL_REVIEW_ONLY` command with `motion_executed=0`, and a post-standby
-step must be rejected without `--log`. That checker needs `tomllib`, so the script
-carries a strict fail-closed fallback for hosts that only ship Python 3.10.
-The descriptor guard uses packed 32-bit axis arrays so Verilator 5.008 observes
-post-initialization changes at the module port; ABI 09 also tests its connected
-six-axis controller path.
+## G3 离线任务表门禁（归档轨）
 
-# ABI 10 六轴离线验证
+`scripts/g3_offline_plan.py` 只做离线 JSON/TOML 检查并打印一条待人工审阅的命令，**不访问 UIO、不执行运动**。`bash sim/run_g3_offline_plan_guard.sh` 逐条钉住它：空模板必须被拒、缺 `id5_fault_cleared_by_operator` 必须被拒、越界目标必须被拒（同时证明 `safe_min`/`safe_max` 真被读到）、已确认任务表在 `--step standby` 通过且只打印一条 `MANUAL_REVIEW_ONLY`、`motion_executed=0`、`--log` 缺失时拒绝。
 
-`sim/run_regression_wsl.sh` 另运行 `tb_g2_six_axis_controller` 和 `run_pl_g2_six_cli_guard.sh`。前者使用假总线应答覆盖：默认校准掩码为零时不发 WRITE、物理禁发、限位拒绝、六轴连续三轮反馈、第二次显式同步提交、5 秒窗口超时无重发、反馈错误对应 ID 和闭锁、读六轴后软件停止、两次现场 READ 后 50 count 标定及超过 50 count 拒绝。`tb_hx30hm_g1_engine` 逐字节核对完整 62 字节广播帧、每轴 `0x28=1`、目标/时间/速度字段和校验和，并验证广播完成不等待应答。CLI mock 验证无 `--execute`、未标定和过大步差均不写命令寄存器。仿真不替代安装后安全限位及断电急停的实物验收。
+> **按双轨制，这套门禁只属于归档轨，不是竞赛轨运动的前置条件。** 该脚本需要 `tomllib`（Python 3.11+），对只带 Python 3.10 的主机有严格 fail-closed 回退解析（只读 `servo_id`/`safe_min`/`safe_max`，解析失败即抛错，绝不返回空限位）。
 
-ABI 10 另验证标定 +20 仅前进 6 count 不能通过、目标 ±5 边界、fault 9 后仍可显式手动标定而 SYNC 仍闭锁、128 条日志容量与溢出拒绝、逐条反馈元数据和超时原因、ID 2–6 单轴帧，以及只读 `0x28` 的请求、应答 ID/长度/校验和/伺服错误。所有新运动仍仅由 G2 状态机发起；G1 操作码 3 和 8 继续拒绝。
+## 新增测试的写法
 
-ABI 11 新增 `tb_g2_board_limits`：使用实际六轴综合常量逐轴覆盖最小值、最大值及相邻越界值（ID 5 包括 0/4000），并检查速度原始字段 0/500/1500/1501、物理禁发和 ID 2 边界外标定不得发 WRITE。`tb_rtcs_g1_ttl_top` 在禁发时读回 `calibrated_mask=0x3f` 与每轴 min/max/参考位置/速度上限。
-
-当前 ABI 14 的 `tb_g2_six_axis_controller` 验证六轴绝对命令先 WRITE、失败 READ 发生在发后且保留 WRITE 状态、六轴连续三轮有效到位，以及 stop/相对标定功能性发前 READ。`tb_rtcs_g2_one_servo` 验证单轴先 WRITE、正常 ACK 和三次发后有效到位反馈、目标已在误差带内的绝对命令，以及超时不自动重发。`tb_axi_lite_regs` 检查 0x100 以上寄存器与 ABI 地址不混叠。CLI mock 检查无起点时仍可按反馈报告成功、缺 ACK/缺反馈/缺任一轴到位时拒绝 OK、原始 ERROR 和广播 ACK 不适用。完整离线回归：`bash sim/run_regression_wsl.sh`。
-
-G3 起步的 `diagnose` CLI mock 验证六轴只读成功、校验通过但舵机 ERROR 非零时保留原始错误字节与位置、其他 READ 故障时标记位置不可用，并确认 `--execute` 被拒绝且不触发 G2 WRITE。
-
-ABI 13 的故障字节锁存能力在 ABI 14 保留：相对标定或 stop 的发前 READ、单播 WRITE 应答和发后 READ 均检查故障 ID、阶段及 `DIAG[23:16]`，下一次显式提交须清除旧诊断。绝对命令没有发前 READ 阶段。CLI mock 确认广播故障输出 `servo_error_raw`，同时保持 `unicast_ack=NOT_APPLICABLE_BROADCAST`。
+每项测试都应由本目录的脚本执行、注明仿真器与版本；新测试加入 `sim/run_regression_wsl.sh`。踩坑记录：`grep -c` 数的是行数，一行六个 `--axis` 只算 1，须用 `grep -o ... | wc -l`。

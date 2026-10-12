@@ -8,7 +8,7 @@
     "operator_confirmed": false
   },
   "setup": {
-    "camera_model": "Hiwonder TY-900408-V3.3 (0.3MP USB, no depth)",
+    "camera_model": "Hiwonder 0.3MP 120deg USB UVC (no depth)",
     "camera_calibration_file": null,
     "camera_to_world_calibration_file": null,
     "world_frame_definition": null,

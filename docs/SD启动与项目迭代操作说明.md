@@ -73,4 +73,4 @@
 
    只有出现 RTCS_PL_G2_SIX_OK command=stop 才算软件停止成功。fault 5 必须看 fault_id、phase、engine_fault 和 write_sent，以区分保持广播前后的 READ 失败。独立断电急停另行在支撑受载关节的条件下实测，软件 stop 不能代替它。
 
-任一 ABI/限位不符、ID 缺失、物理禁发状态异常、ERR、干涉或异常动作均停止后续提交并保留日志；故障不会自动重试。G2 阶段总结与核心文件目录见 [G2 说明](2.G2-six-axis-calibration.md)。原多版本操作记录保存在 [历史快照](history/SD-through-ABI12-20261009.md)。
+任一 ABI/限位不符、ID 缺失、物理禁发状态异常、ERR、干涉或异常动作均停止后续提交并保留日志；故障不会自动重试。G2 阶段总结与核心文件目录见 [G2 说明](2.G2-six-axis-calibration.md)。历史多版本操作记录与旧镜像见 [artifacts/archive/](../artifacts/archive/)。

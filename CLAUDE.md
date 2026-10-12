@@ -6,13 +6,23 @@
 - 在代码文件中使用与用户沟通一致的语言撰写简明专业的代码注释
 
 ## 测试与验证
-- 所有变更必须通过对应语言的lint/format/test,只有通过必要的本地检查后，才可以回传或提交代码，禁止依赖后续修复来兜底
-- 如目前无对应语言的测试与验证要求，应当在CLAUDE.md中结合项目实际情况补齐要求
-- 如用户未要求，不引入测试框架
+- 所有变更必须通过对应语言的 lint/format/test,只有通过必要的本地检查后，才可以回传或提交代码，禁止依赖后续修复来兜底
+- 本项目的验证要求（与项目实际结合）：
+  - **RTL 或 CLI 任何改动**：必须 `bash sim/run_regression_wsl.sh` 返回 `RTCS_WSL_REGRESSION_PASS`；新增行为要加测试并挂进该脚本。
+  - **C/CLI 改动**：另需通过 `-std=c11 -Wall -Wextra -Werror` 语法检查。
+  - **寄存器语义或可观察接口变化**：必须同步 `src/pl/rtl/rtcs_pkg.sv` + `src/ps/linux/include/rtcs_registers.hpp`，并升 ABI。
+  - **改了 RTL**：需要重综合 bitstream 才生效，须明确说明；**改了 CLI**：需要重建 PetaLinux 应用包。
+  - **仿真通过 ≠ 实物通过**；板端运动只由操作者执行，不得由脚本或智能体代为执行。
+  - 未跑或未通过的验证必须如实说明，不得声称通过。
 
 ## 约束与规范
 - 技术栈：
-
+  - 硬件：ALINX AX7020（XC7Z020），PS7 + PL，PS 可见地址 `0x43C0_0000`（`generic-uio`），PL 直连 HX-30HM 总线舵机（1 Mbps 8N1 半双工，ID 1–5 关节 + ID 6 夹爪）
+  - PL：SystemVerilog，Vivado 2023.2，AXI4-Lite 寄存器组（ABI `0x5254000E`）
+  - PS：PetaLinux 2023.2 Linux，C/C++ 用户态 CLI，CMake，UIO mmap
+  - 仿真/回归：WSL + Verilator 5.008（`bash sim/run_regression_wsl.sh`），Icarus Verilog 作为备用
+  - 视觉（G4 起）：OpenCV，单目 2D + 平面单应映射，**无点云、无深度学习抓取检测**
+- 流程规范：**双轨制**（见 `docs/0.1hardware_bringup.md`）。竞赛轨只保留红线门禁，**任何流程性门禁不得阻塞竞赛轨的运动路径**；证据归档与统计属归档轨。
 - 代码规范：
 所有代码必须分模块
 所有代码要严格按照通用的编码规范编程，即命名规范、注释规范……

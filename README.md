@@ -1,6 +1,6 @@
 # Zynq-6DOF-RTCS
 
-AX7020（XC7Z020）PS/PL 六轴 HX-30HM 总线舵机控制工程。源码、XSA、bitstream 和仓库 SD 三件套为 ABI **0x5254000E**，**板端已于 2026-10-12 实测运行同一 ABI**（`physical_tx=ENABLED`）。**ID 1–5 为关节，ID 6 为夹爪**；**ID 5 的旧窄内部角度窗口已由官方软件重新校准并实测通过**。相机为 Hiwonder TY-900408-V3.3（30 万像素 USB、无深度）。版本与哈希见[操作说明](docs/SD启动与项目迭代操作说明.md)。
+AX7020（XC7Z020）PS/PL 六轴 HX-30HM 总线舵机控制工程。源码、XSA、bitstream 和仓库 SD 三件套为 ABI **0x5254000E**，**板端已于 2026-10-12 实测运行同一 ABI**（`physical_tx=ENABLED`）。**ID 1–5 为关节，ID 6 为夹爪**；**ID 5 的旧窄内部角度窗口已由官方软件重新校准并实测通过**。相机为幻尔 30 万像素 / 120° 广角 USB 免驱摄像头（无深度）。版本与哈希见[操作说明](docs/SD启动与项目迭代操作说明.md)。
 
 > **流程约定：本仓库采用[双轨制](docs/0.1hardware_bringup.md)。** 竞赛轨只保留红线门禁（独立供电、物理禁发、PL 限位/速度/截止时间、独立硬件急停、实测标定、单帧提交、不自动重试），**任何流程性门禁不得阻塞竞赛轨的运动路径**；证据归档、逐步操作者确认、100 次循环与 P99 统计属归档轨，在周末补齐。冲刺日程与每日任务卡见 [docs/7.sprint-plan-daily-tasks.md](docs/7.sprint-plan-daily-tasks.md)。
 
@@ -25,7 +25,7 @@ ABI 13 起在运动故障时保存舵机 ERROR 原始字节及 ID（ABI 0E 保�
 
     bash sim/run_regression_wsl.sh
 
-新镜像上板后先在物理禁发状态运行 probe 和 limits；装上 J20-36/W15 到 J20-38/GND 的允许跳线后可只读 diagnose 与 ID 5 torque-status。六轴目标只能根据操作者确认的机械空间显式填写；diagnose 失败须保留故障输出，不能据此推断路径安全。stop 与独立断电急停的操作顺序见 [SD 操作说明](docs/SD启动与项目迭代操作说明.md)。板端运动不由构建脚本执行。
+新镜像上板后先在物理禁发状态运行 probe 和 limits；装上 J20-36/W15 到 J20-38/GND 的允许跳线后可只读 diagnose 与 torque-status。**2026-10-12 的六轴基线（`limits` + `diagnose` + `torque-status`）已全绿**，原始输出见 [G2 板端基线](docs/2.G2-six-axis-calibration.md)。注意上电后 `0x28=0`（卸力），不下扭矩开关舵机不会动。六轴目标只能根据当次 diagnose 与实测机械空间显式填写。stop 与独立断电急停的操作顺序见 [SD 操作说明](docs/SD启动与项目迭代操作说明.md)。板端运动不由构建脚本执行。
 
 ## 核心目录
 
@@ -38,6 +38,7 @@ ABI 13 起在运动故障时保存舵机 ERROR 原始字节及 ID（ABI 0E 保�
 | [scripts/](scripts/build_vivado.ps1) | Vivado、XSA 导入和 PetaLinux SD 构建 |
 | [artifacts/hw/](artifacts/hw/rtcs_system.xsa) 与 [artifacts/sd/](artifacts/sd/SHA256SUMS) | ABI 0E XSA、bitstream、SD 三件套及哈希；旧 ABI 见归档 |
 | [docs/](docs/0.1hardware_bringup.md) | 阶段 G0–G6、双轨制门禁、冲刺日程与每日任务卡 |
-| [docs/history/](docs/history/README-through-G2-20261009.md) 与 [artifacts/archive/](artifacts/archive/) | 旧 ABI 操作记录和归档镜像 |
+| [artifacts/reports/](artifacts/reports/competition-plan-material-assessment-20261012.md) | 竞赛计划与素材评估、交接提示词 |
+| [artifacts/archive/](artifacts/archive/) | 旧 ABI 的 bit/XSA/SD 快照与操作记录；被取代的旧说明文档已清理，需要时从 git 历史取回 |
 
 当前构建使用 Vivado 2023.2 与 PetaLinux 2023.2。默认构建不导出舵机 IO；实际 TTL 镜像须用 Vivado 脚本的 Build/Ttl 选项，并保留独立舵机电源与物理禁发。G3 的轨迹引擎、FIFO 与硬件 IRQ 仍未实现（PS 侧软状态机承担任务编排）；100 次静态抓放与 P99 统计属归档轨，不是运动前置条件。
