@@ -31,9 +31,15 @@ module hx30hm_g1_engine #(
   logic [7:0] sum;
   logic [7:0] tx_byte, rx_byte;
   logic tx_start, tx_busy, tx_done, rx_valid, rx_framing_fault;
+  logic rx_flush;
   assign busy = state != IDLE;
   assign tx_enable = !clear && (state == SEND || state == SEND_WAIT);
   assign tx_start = state == SEND;
+  // 半双工总线：发送期间接收机把本机发出的字节同样解成 rx_valid。若不冲刷，
+  // 最后一个发送字节（当校验和恰为 0xFF 时尤其危险）会落在 RECEIVE 的
+  // rx_index 0，被当成应答帧头，进而报出虚假的“应答ID不符”或校验和故障。
+  // TURN 只持续一拍，在此复位接收状态机，丢弃自收残留，再从舵机起始位重新同步。
+  assign rx_flush = (state == TURN);
 
   function automatic logic supported_op(input logic [7:0] op);
     begin
@@ -134,7 +140,7 @@ module hx30hm_g1_engine #(
 
   uart_byte_tx u_tx (.clk(clk), .rst_n(rst_n), .clear(clear), .start(tx_start),
     .data(tx_byte), .tx(tx), .busy(tx_busy), .done(tx_done));
-  uart_byte_rx u_rx (.clk(clk), .rst_n(rst_n), .clear(clear), .rx(rx),
+  uart_byte_rx u_rx (.clk(clk), .rst_n(rst_n), .clear(clear || rx_flush), .rx(rx),
     .data(rx_byte), .valid(rx_valid), .framing_fault(rx_framing_fault));
 
   always_ff @(posedge clk or negedge rst_n) begin

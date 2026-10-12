@@ -1,0 +1,40 @@
+petalinux-rtcs:~$ sudo rtcs-pl-g2-six --uio /dev/uio0 move-six \
+>   --axis 1:2501:500:10 --axis 2:1379:500:10 \
+>   --axis 3:2615:500:10 --axis 4:2361:500:10 \
+>   --axis 5:2507:500:10 --axis 6:2110:500:10 --execute
+Password:
+RTCS_PL_G2_SIX abi=0x5254000c physical_tx=ENABLED calibrated_mask=0x3f
+axis=1 target=2501 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+axis=2 target=1379 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+axis=3 target=2615 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+axis=4 target=2361 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+axis=5 target=2507 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+axis=6 target=2110 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+result id=1 start=2006 target=2501 last=2007 actual_delta=1 target_error=494 position_change_observed=1 in_band=0
+result id=2 start=1029 target=1379 last=1029 actual_delta=0 target_error=350 position_change_observed=0 in_band=0
+result id=3 start=2883 target=2615 last=2882 actual_delta=-1 target_error=267 position_change_observed=1 in_band=0
+result id=4 start=2860 target=2361 last=2858 actual_delta=-2 target_error=497 position_change_observed=1 in_band=0
+result id=5 start=2015 target=2507 last=UNAVAILABLE actual_delta=UNAVAILABLE target_error=UNAVAILABLE
+result id=6 start=1644 target=2110 last=UNAVAILABLE actual_delta=UNAVAILABLE target_error=UNAVAILABLE
+command_result write_sent=1 unicast_ack=NOT_APPLICABLE_BROADCAST fault=5 fault_id=5 start_valid_mask=0x3f feedback_valid_mask=0x0f position_change_mask=0x0d phase=post_write_feedback engine_fault=8
+ERR g2_six_fault=5 fault_id=5 write_sent=1 reason=read_or_protocol_failure phase=post_write_feedback engine_fault=8
+petalinux-rtcs:~$ sudo rtcs-pl-g2-six --uio /dev/uio0 move-six \
+>   --axis 1:2000:500:10 --axis 2:861:500:10 \
+>   --axis 3:3117:500:10 --axis 4:2861:500:10 \
+>   --axis 5:2000:500:10 --axis 6:1585:500:10 --execute
+RTCS_PL_G2_SIX abi=0x5254000c physical_tx=ENABLED calibrated_mask=0x3f
+axis=1 target=2000 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+axis=2 target=861 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+axis=3 target=3117 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+axis=4 target=2861 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+axis=5 target=2000 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+axis=6 target=1585 speed_raw=500 time_raw=10 tolerance=30 torque=0x28:1
+result id=1 start=2486 target=2000 last=2486 actual_delta=0 target_error=486 position_change_observed=0 in_band=0
+result id=2 start=1381 target=861 last=UNAVAILABLE actual_delta=UNAVAILABLE target_error=UNAVAILABLE
+result id=3 start=2664 target=3117 last=UNAVAILABLE actual_delta=UNAVAILABLE target_error=UNAVAILABLE
+result id=4 start=2381 target=2861 last=UNAVAILABLE actual_delta=UNAVAILABLE target_error=UNAVAILABLE
+result id=5 start=2043 target=2000 last=UNAVAILABLE actual_delta=UNAVAILABLE target_error=UNAVAILABLE
+result id=6 start=2097 target=1585 last=UNAVAILABLE actual_delta=UNAVAILABLE target_error=UNAVAILABLE
+command_result write_sent=1 unicast_ack=NOT_APPLICABLE_BROADCAST fault=5 fault_id=2 start_valid_mask=0x3f feedback_valid_mask=0x01 position_change_mask=0x00 phase=post_write_feedback engine_fault=8
+ERR g2_six_fault=5 fault_id=2 write_sent=1 reason=read_or_protocol_failure phase=post_write_feedback engine_fault=8
+petalinux-rtcs:~$

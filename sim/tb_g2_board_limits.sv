@@ -68,17 +68,7 @@ module tb_g2_board_limits;
   endtask
   task automatic expect_sync(input int axis,input int goal,input int raw_speed);
     int n=0;
-    for (int id=1;id<=6;id++) begin
-      n=0;
-      while ((!engine_start || engine_op!=2) && n<12) begin
-        @(negedge clk); n++;
-      end
-      if (!engine_start || engine_id!=id || engine_op!=2)
-        $fatal(1,"SYNC pre-WRITE live READ missing id=%0d",id);
-      @(negedge clk); engine_position=16'(REFERENCE[id-1]); engine_done=1;
-      @(negedge clk); engine_done=0;
-    end
-    n=0;
+    // Absolute SYNC must start with WRITE, even if current position is unreadable.
     while (!engine_start && n<12) begin @(negedge clk); n++; end
     if (!engine_start || engine_op!=10 || sync_position[axis]!=goal ||
         sync_speed[axis]!=raw_speed || sync_time[axis]!=10)

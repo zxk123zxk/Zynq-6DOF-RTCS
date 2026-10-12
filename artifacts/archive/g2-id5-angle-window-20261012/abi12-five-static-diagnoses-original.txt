@@ -1,0 +1,32 @@
+User-provided board output, 2026-10-09, ABI 0x5254000c.
+
+Command:
+for n in 1 2 3 4 5; do
+  echo "diagnose round=$n"
+  sudo rtcs-pl-g2-six --uio /dev/uio0 diagnose || break
+  sleep 1
+done
+
+Each of rounds 1, 2, 3, 4, and 5 reported:
+RTCS_PL_G2_SIX abi=0x5254000c physical_tx=ENABLED calibrated_mask=0x3f
+diagnose id=1 position_raw=2006 servo_error=0x00 read_fault=0 status=OK
+diagnose id=2 position_raw=1029 servo_error=0x00 read_fault=0 status=OK
+diagnose id=3 position_raw=2883 servo_error=0x00 read_fault=0 status=OK
+diagnose id=4 position_raw=2860 servo_error=0x00 read_fault=0 status=OK
+diagnose id=5 position_raw=2013 servo_error=0x00 read_fault=0 status=OK
+diagnose id=6 position_raw=1644 servo_error=0x00 read_fault=0 status=OK
+RTCS_PL_G2_SIX_DIAG OK issues=0 read_only=1 write_sent=0
+
+Command:
+sudo rtcs-pl-g2-six --uio /dev/uio0 move-six \
+  --axis 1:2006:500:10 --axis 2:860:500:10 \
+  --axis 3:2883:500:10 --axis 4:2860:500:10 \
+  --axis 5:2013:500:10 --axis 6:1644:500:10 --execute
+
+Output:
+RTCS_PL_G2_SIX abi=0x5254000c physical_tx=ENABLED calibrated_mask=0x3f
+ERR axis=2 target_or_speed_outside_pl_limit target=860 speed_raw=500 range=861..1500 speed_max=1500
+
+The five rounds establish successful stationary READs at those moments. The CLI
+rejected target 860 before commit. This record does not explain an earlier
+post-WRITE engine_fault=8. Position values are historical, not live targets.

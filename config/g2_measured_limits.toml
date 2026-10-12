@@ -38,12 +38,18 @@ safe_min = 2000
 safe_max = 2861
 
 [[axis]]
+# 2026-10-12 操作者报告已用官方软件重新校准 ID 5，并认可 0..4000 作为命令范围。
+# 这不是机械全行程的实测安全区间；具体 G3 工位路径仍须逐步现场确认。
+# 旧窄窗口根因与尚缺的写后原始记录见 docs/2.G2-six-axis-calibration.md。
 servo_id = 5
 reference_position = 2000
 safe_min = 0
 safe_max = 4000
 
 [[axis]]
+# ID 6 = 夹爪执行器（用户 2026-10-12 确认）。下面 1585..2500 是其命令闭区间标注，
+# "开"与"合"对应的原始 count 方向与两端值须由 G3 步骤 1 实测确认后补记。
+# 夹爪与 ID 1–5 共用同一条六轴广播命令，不为它另建旁路。
 servo_id = 6
 reference_position = 1585
 safe_min = 1585

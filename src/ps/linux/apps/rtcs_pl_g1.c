@@ -12,7 +12,7 @@
 #include <time.h>
 #include <unistd.h>
 
-enum { REGION_BYTES = 0x10000, ID_VERSION = 0x5254000c,
+enum { REGION_BYTES = 0x10000, ID_VERSION = 0x5254000e,
        REG_ID = 0x00, REG_G1_ID = 0x50, REG_G1_OP = 0x54,
        REG_G1_CMD = 0x58, REG_G1_STATUS = 0x5c,
        REG_G1_RESULT = 0x60, REG_G1_FAULT = 0x64 };

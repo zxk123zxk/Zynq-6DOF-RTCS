@@ -56,10 +56,14 @@ install -D -m 0644 "$repo_root/src/ps/linux/apps/rtcs_pl_g2.c" \
   "$project_dir/project-spec/meta-user/recipes-apps/rtcs-pl-g2/files/rtcs_pl_g2.c"
 install -D -m 0644 "$repo_root/src/ps/linux/apps/rtcs_pl_g2_six.c" \
   "$project_dir/project-spec/meta-user/recipes-apps/rtcs-pl-g2/files/rtcs_pl_g2_six.c"
+install -D -m 0644 "$repo_root/src/ps/linux/apps/rtcs_servo_diag.h" \
+  "$project_dir/project-spec/meta-user/recipes-apps/rtcs-pl-g2/files/rtcs_servo_diag.h"
 install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-bsp/device-tree/files/system-user.dtsi" \
   "$project_dir/project-spec/meta-user/recipes-bsp/device-tree/files/system-user.dtsi"
 install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-kernel/linux/linux-xlnx/usbserial.cfg" \
   "$project_dir/project-spec/meta-user/recipes-kernel/linux/linux-xlnx/usbserial.cfg"
+install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-kernel/linux/linux-xlnx/uio.cfg" \
+  "$project_dir/project-spec/meta-user/recipes-kernel/linux/linux-xlnx/uio.cfg"
 kernel_append="$project_dir/project-spec/meta-user/recipes-kernel/linux/linux-xlnx_%.bbappend"
 if [[ ! -e "$kernel_append" ]]; then
   install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-kernel/linux/linux-xlnx_%.bbappend" "$kernel_append"
@@ -68,6 +72,14 @@ else
     printf '\nFILESEXTRAPATHS:prepend := "${THISDIR}/linux-xlnx:"\n' >> "$kernel_append"
   grep -qF 'file://usbserial.cfg' "$kernel_append" || \
     printf '\nSRC_URI += "file://usbserial.cfg"\n' >> "$kernel_append"
+  grep -qF 'file://uio.cfg' "$kernel_append" || \
+    printf '\nSRC_URI += "file://uio.cfg"\n' >> "$kernel_append"
+  grep -qF 'KERNEL_MODULE_AUTOLOAD += "uio_pdrv_genirq"' "$kernel_append" || \
+    printf '\nKERNEL_MODULE_AUTOLOAD += "uio_pdrv_genirq"\n' >> "$kernel_append"
+  grep -qF 'KERNEL_MODULE_PROBECONF += "uio_pdrv_genirq"' "$kernel_append" || \
+    printf '\nKERNEL_MODULE_PROBECONF += "uio_pdrv_genirq"\n' >> "$kernel_append"
+  grep -qF 'module_conf_uio_pdrv_genirq = "options uio_pdrv_genirq of_id=generic-uio"' "$kernel_append" || \
+    printf '\nmodule_conf_uio_pdrv_genirq = "options uio_pdrv_genirq of_id=generic-uio"\n' >> "$kernel_append"
 fi
 rootfs_config="$project_dir/project-spec/meta-user/conf/user-rootfsconfig"
 mkdir -p "$(dirname "$rootfs_config")"

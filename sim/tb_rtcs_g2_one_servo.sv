@@ -19,6 +19,7 @@ module tb_rtcs_g2_one_servo;
           torque_on_count=0,torque_off_count=0;
   logic respond=1;
   logic model_updates_on_write=1;
+  logic [7:0] model_write_error=0;
   logic [15:0] model_torque=0;         // 舵机侧 0x28，上电为 0
   logic [15:0] model_position=16'd2026;
   logic [15:0] model_settle_position=16'd2080;
@@ -83,10 +84,12 @@ module tb_rtcs_g2_one_servo;
   endtask
   task automatic status_packet(input bit is_read,input logic [15:0] pos);
     logic [7:0] sum;
+    logic [7:0] error_byte;
     begin
-      sum=expected_id+(is_read?8'd4:8'd2);
+      error_byte=is_read ? 8'd0 : model_write_error;
+      sum=expected_id+(is_read?8'd4:8'd2)+error_byte;
       send_byte(8'hff); send_byte(8'hff); send_byte(expected_id);
-      send_byte(is_read?8'd4:8'd2); send_byte(0);
+      send_byte(is_read?8'd4:8'd2); send_byte(error_byte);
       if (is_read) begin
         send_byte(pos[7:0]); send_byte(pos[15:8]);
         sum=sum+pos[7:0]+pos[15:8];
@@ -255,8 +258,8 @@ module tb_rtcs_g2_one_servo;
     commit();
     wr('h70,1998); wr('h74,0); // 提交后寄存器变化不能改变已快照的帧。
     wait_done(st);
-    if (st[2] || st[5] || !st[6] || !st[7] || !st[16] || !st[17] ||
-        !st[4] || write_count!=1 || st[15:8]<3 ||
+    if (st[2] || st[5] || st[6] || !st[7] || !st[16] || st[17] ||
+        !st[4] || write_count!=1 || read_count!=3 || st[15:8]<3 ||
         goal_seen!=TARGET || model_torque!=1 || torque_on_count!=1)
       $fatal(1,"variable parameters or torque enable failed");
 
@@ -353,20 +356,49 @@ module tb_rtcs_g2_one_servo;
         $fatal(1,"ID %0d single-axis motion failed",axis);
     end
 
-    // 可配置容差 30：误差 25 且有位移可通过；起点已在带内但无变化不能报运动成功。
+    // 绝对目标只按发后反馈判断：误差 25 可通过，已在带内且未变化也可通过。
     expected_id=1; expected_target=2100; expected_speed=500; expected_time=10;
     model_position=2000; model_settle_position=2125; model_updates_on_write=1;
     descriptor(1,0,2100,{16'd10,16'd500},dut.hw_ticks+64'd120000);
     wr('h6c,32'h0032_001e);
     commit(); wait_done(st);
-    if (st[2] || !st[17] || !st[16] || !st[6] || !st[7])
-      $fatal(1,"configurable tolerance rejected observed displacement");
+    if (st[2] || st[17] || !st[16] || st[6] || !st[7])
+      $fatal(1,"configurable tolerance rejected valid feedback");
     expected_target=2120; model_position=2100; model_updates_on_write=0;
     descriptor(1,0,2120,{16'd10,16'd500},dut.hw_ticks+64'd120000);
     wr('h6c,32'h0032_001e);
     commit(); wait_done(st); rd('h88,fault);
-    if (fault!=16 || !st[2] || !st[4] || !st[7] || st[17])
-      $fatal(1,"in-band static feedback falsely accepted as motion");
+    if (fault!=0 || st[2] || !st[4] || !st[7] || st[17])
+      $fatal(1,"valid in-band absolute feedback was rejected");
+
+    // Reproduce the ABI 0D report at the protocol boundary: the frame is
+    // emitted once, but a checksum-valid nonzero servo ERROR is not an ACK.
+    expected_id=5; expected_speed=500; expected_time=100;
+    model_updates_on_write=0; model_write_error=8'h10;
+    expected_target=1500; model_position=2012;
+    before_writes=write_count;
+    descriptor(5,0,1500,{16'd100,16'd500},dut.hw_ticks+64'd120000);
+    commit(); wait_done(st); rd('h88,fault);
+    if (fault!=8 || !st[2] || !st[4] || st[16] || st[7] ||
+        write_count!=before_writes+1 || dut.g1_fault!=8 ||
+        dut.g1_result!=32'h0010_0000)
+      $fatal(1,"ID 5 WRITE ERROR was hidden, accepted, or retried");
+
+    model_write_error=0; model_updates_on_write=1;
+    expected_target=2000; model_position=1931; model_settle_position=1989;
+    descriptor(5,0,2000,{16'd100,16'd500},dut.hw_ticks+64'd120000);
+    commit(); wait_done(st); rd('h88,fault);
+    if (fault!=0 || st[2] || !st[4] || !st[16] || !st[7] ||
+        write_count!=before_writes+2)
+      $fatal(1,"ID 5 explicit recovery after rejected target failed");
+
+    model_write_error=8'h10; model_updates_on_write=0;
+    expected_target=1000;
+    descriptor(5,0,1000,{16'd100,16'd500},dut.hw_ticks+64'd120000);
+    commit(); wait_done(st); rd('h88,fault);
+    if (fault!=8 || !st[2] || !st[4] || st[16] || st[7] ||
+        write_count!=before_writes+3 || dut.g1_result!=32'h0010_0000)
+      $fatal(1,"second ID 5 WRITE ERROR was hidden or accepted");
 
     $display("TB_RTCS_G2_ONE_SERVO_PASS reads=%0d motion_frames=%0d torque_on=%0d releases=%0d",
       read_count,write_count,torque_on_count,torque_off_count);

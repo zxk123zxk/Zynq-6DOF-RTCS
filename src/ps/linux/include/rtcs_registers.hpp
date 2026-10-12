@@ -7,7 +7,7 @@
 namespace rtcs {
 // PL 返回的接口标识；启动时应先读取并校验，避免使用不匹配的寄存器布局。
 // 09：保留 ID 1 参数化运动，新增六轴描述符、标定、反馈与停止寄存器。
-constexpr std::uint32_t kIdVersion = 0x5254'000cU;
+constexpr std::uint32_t kIdVersion = 0x5254'000eU;
 constexpr std::size_t kAxisCount = 6;
 constexpr std::uintptr_t kAxiBaseAddress = 0x43C0'0000U;
 constexpr std::size_t kAxiRegionBytes = 0x1'0000U;
@@ -66,8 +66,8 @@ enum class Reg : std::uint32_t {
   kG2SixObserve100ms = 0x104,
   kG2SixStart = 0x108,
   kG2SixResult = 0x10c,
-  kG2SixDiag = 0x110,
-  kG2Start = 0x114,
+  kG2SixDiag = 0x110, // ERROR[23:16], phase[15:8], engine fault[3:0]
+  kG2Start = 0x114, // ABI 14 保留地址，绝对运动读值为 0
 };
 
 constexpr std::uint32_t kControlEnable = 1U << 0;
@@ -87,7 +87,7 @@ constexpr std::uint32_t kG1Error = 1U << 2;
 constexpr std::uint32_t kG1PhysicalTxDisabled = 1U << 3;
 constexpr std::uint32_t kG2WriteSent = 1U << 4;
 constexpr std::uint32_t kG2Late = 1U << 5;
-// 单轴 G2_STATUS bit 6 保留为 0，不再是一次性锁。
+// ABI 14 单轴绝对命令不采起点：G2_STATUS bit 6 / bit 17 恒为 0。
 
 // PS 在写入 COMMAND.ENQUEUE 前准备好的完整六轴运动描述符。
 struct MotionDescriptor {
@@ -98,7 +98,7 @@ struct MotionDescriptor {
   std::uint16_t sequence{};
 };
 
-// ABI 12 MMIO 六轴广播描述符；限位仍由 PL 综合常量独立裁决。
+// ABI 14 MMIO 六轴广播描述符；限位仍由 PL 综合常量独立裁决。
 struct SixAxisMotionDescriptor {
   std::array<std::uint16_t, kAxisCount> target{};
   std::array<std::uint16_t, kAxisCount> speed_raw{};

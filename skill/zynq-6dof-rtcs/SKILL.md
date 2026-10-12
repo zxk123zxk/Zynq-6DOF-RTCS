@@ -48,7 +48,22 @@ This is strictly read-only: do not edit source, configuration, build files, docu
 - PS owns vision, calibration, FK/IK, task policy, deadlines, and logs. PL owns timing-critical trajectory/bus/protocol parsing, watchdogs, limits, E-stop, and deterministic scheduling.
 - AXI4-Lite is the current command/status interface. Do not add DMA, HLS, ROS, or a new hardware protocol merely because a reference project uses it; require measured need and user scope.
 - Do not add `Material_Library/` to build scripts, source lists, include paths, or deliverables. It is read-only reference material, and copied code requires a separate provenance/license review.
-- Any request that would enable `servo_tx_en` must stop at the applicable G0–G4 safety gate unless the user supplies the required measured evidence and expressly authorizes that gate change.
+- Any request that would enable `servo_tx_en` must stop at the applicable red-line gate unless the user supplies the required measured evidence and expressly authorizes that gate change. The stage set is G0–G6 (see `docs/0.1hardware_bringup.md` to `docs/6.G6-final-delivery.md`).
+
+## 双轨制（Dual-track gates）— 最高优先级流程约定
+
+This repository runs **two tracks**, defined in `docs/0.1hardware_bringup.md`. Apply them whenever you gate, sequence, or review work.
+
+- **竞赛轨（fast）** — produces a demonstrable increment every week. **Only the red-line gates apply.** All process gates are switched off.
+- **归档轨（slow）** — satisfies documentation, review, and reproducibility. **Red-line + all process gates apply.**
+
+**Red-line gates（any track, never bypassed）**: independent servo power; physical transmit-inhibit strap; PL compile-time target/speed/deadline/bus-exclusion checks; an E-stop independent of Linux/PS/PL; measured-only calibration values; at most one frame per commit; no automatic retry of an errored motion command.
+
+**Process gates（archival track only）**: per-step `operator_confirmed` and evidence references in `config/g3_station_plan.template.json` validated by `scripts/g3_offline_plan.py`; full raw-output archiving per command; the "position feedback alone cannot prove a grasp" judgement chain; 100-cycle full logging; P99 statistics; long-run statistics.
+
+**Rule**: **任何流程性门禁不得阻塞竞赛轨的运动路径** — no process gate may block the fast track's motion path. If a check produces only an evidence requirement and does not prevent an irreversible action, it must not be a precondition for motion on the fast track. Conversely, **red-line gates are never relaxed to make a deadline**; relieve schedule pressure by cutting feature scope, never by removing independent power, the inhibit strap, or the E-stop.
+
+**Current stage entry conditions** (measured, 2026-10-12): board ABI `0x5254000E` flashed and verified; ID 1–5 are joints and **ID 6 is the gripper**; ID 5's narrow internal angle window is resolved. Use `docs/7.sprint-plan-daily-tasks.md` for the day-by-day plan.
 
 ## Reusable AXI peripheral bring-up baseline
 

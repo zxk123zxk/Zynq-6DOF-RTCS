@@ -1,0 +1,16 @@
+80874268f9b28d35b9a00a8e826fbc612d5c283992361d4a2cf567a0e3eafa32  ./README.md
+ac7610d6dec438a63cb84c2e60df820d06609d3d5b25c933a3c25a2a8abc2d94  ./abi0e-SHA256SUMS-built-20261012.txt
+c9b1b67bb314b7718e28b50c0614b6ff6cd44f6f3b701e87cd18705a753ac03d  ./abi12-dual-sync-fault5-original.txt
+aaa1ca43a4bd74ac33398dc69345cea597221f421d4a9b90704c1a8c96e09243  ./abi12-five-static-diagnoses-original.txt
+42b5568bfc21867df2a5dd4610d8e2fb7225d6f8d1fd2ecf806846325eaf22dd  ./pre-abi0e/hw/rtcs_system.bit
+7d368b8335d5dc91207f1f905480e58f5d01bf2a7f5273a03927e1ab7e3f38db  ./pre-abi0e/hw/rtcs_system.xsa
+23a975d2c5ad189e284c18049a5bcd745edf08b859ce9a562613986d087c9164  ./pre-abi0e/reports/methodology.rpt
+fc03cade7e8821e7d2ff8add4b373b4dddc616d74b608a3ae3903b99bd6e4a33  ./pre-abi0e/reports/timing_summary.rpt
+2130a17cd6f373e0bc4d18ffe3074b033efe53820625e33735959211b7fcc56b  ./pre-abi0e/reports/utilization.rpt
+add830eafb3797b29dc2a2bb2261b59ca3b8ee080f9e175e1a56090307b0326f  ./pre-abi0e/sd/BOOT.BIN
+79bfc5e8b8a7d1f3249b02a6fd1090a2611d9a68c686845dc63480d2c3fc48e0  ./pre-abi0e/sd/SHA256SUMS
+8c429c49293a5827c22a97940be5beab0928e81aaae43ffa0369cdf323cd156a  ./pre-abi0e/sd/boot.scr
+cbd286d7b44c856e3ec6321bcfc3180177dd327d432f3eda849d612efbaa8300  ./pre-abi0e/sd/image.ub
+870088ecf4620458a615f2208299de6925eb1c933010b3df2176bf1976dc2946  ./pre-abi0e/vivado/zynq_rtcs.xpr
+79bfc5e8b8a7d1f3249b02a6fd1090a2611d9a68c686845dc63480d2c3fc48e0  ./sd-SHA256SUMS-repository-snapshot.txt
+f26ae8e2e72e6e75cd659a9c6c0f19f8d7ec9b6ab0134b92a0a7966e5d1f2cb2  ./sweep-id5-id1-analysis.txt

@@ -7,7 +7,7 @@ if [[ $# -ne 1 ]]; then
 fi
 
 : "${PETALINUX:?Source the PetaLinux 2023.2 settings script first.}"
-for tool in petalinux-build petalinux-package mkimage sha256sum cpio; do
+for tool in petalinux-build petalinux-package mkimage sha256sum cpio dtc; do
   command -v "$tool" >/dev/null || { echo "Missing tool: $tool" >&2; exit 69; }
 done
 project_dir=$(realpath "$1")
@@ -35,12 +35,46 @@ if ! grep -qx 'CONFIG_USB_SERIAL_CH341=y' "${kernel_configs[0]}"; then
   echo "CONFIG_USB_SERIAL_CH341=y absent from final kernel .config: ${kernel_configs[0]}" >&2
   exit 65
 fi
+if ! grep -qx 'CONFIG_UIO_PDRV_GENIRQ=m' "${kernel_configs[0]}"; then
+  echo "CONFIG_UIO_PDRV_GENIRQ=m absent from final kernel .config: ${kernel_configs[0]}" >&2
+  exit 65
+fi
 for file in zynq_fsbl.elf system.bit u-boot.elf image.ub; do
   [[ -s "$project_dir/images/linux/$file" ]] || { echo "Missing build output: $file" >&2; exit 66; }
 done
 rootfs_cpio="$project_dir/images/linux/rootfs.cpio"
 [[ -s "$rootfs_cpio" ]] || { echo 'Missing rootfs.cpio' >&2; exit 66; }
 rootfs_listing=$(cpio -it < "$rootfs_cpio" 2>/dev/null)
+for config in etc/modules-load.d/uio_pdrv_genirq.conf \
+              etc/modprobe.d/uio_pdrv_genirq.conf; do
+  if ! grep -qx "$config" <<< "$rootfs_listing"; then
+    echo "Missing UIO boot configuration in rootfs: $config" >&2
+    exit 65
+  fi
+done
+if ! cpio -i --to-stdout 'etc/modules-load.d/uio_pdrv_genirq.conf' \
+    < "$rootfs_cpio" 2>/dev/null | grep -qx 'uio_pdrv_genirq'; then
+  echo 'UIO module autoload configuration is incorrect' >&2
+  exit 65
+fi
+if ! cpio -i --to-stdout 'etc/modprobe.d/uio_pdrv_genirq.conf' \
+    < "$rootfs_cpio" 2>/dev/null | grep -qx 'options uio_pdrv_genirq of_id=generic-uio'; then
+  echo 'UIO generic-uio module option is incorrect' >&2
+  exit 65
+fi
+if ! grep -Eq '(^|/)uio_pdrv_genirq\.ko(\.(xz|zst|gz))?$' <<< "$rootfs_listing"; then
+  echo 'uio_pdrv_genirq kernel module missing from rootfs' >&2
+  exit 65
+fi
+[[ -s "$project_dir/images/linux/system.dtb" ]] || {
+  echo 'Final system.dtb missing' >&2; exit 66;
+}
+device_tree=$(dtc -I dtb -O dts "$project_dir/images/linux/system.dtb" 2>/dev/null)
+if ! grep -q 'rtcs@43c00000' <<< "$device_tree" ||
+   ! grep -q 'compatible = "generic-uio"' <<< "$device_tree"; then
+  echo 'RTCS generic-uio node missing from final device tree' >&2
+  exit 65
+fi
 for cli in rtcs-pl-g1 rtcs-pl-g2 rtcs-pl-g2-six; do
   if ! grep -qx "usr/bin/$cli" <<< "$rootfs_listing"; then
     echo "Missing $cli in rootfs.cpio; refusing to package SD image" >&2

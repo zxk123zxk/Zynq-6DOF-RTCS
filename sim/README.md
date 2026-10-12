@@ -64,6 +64,14 @@ CLI's independent final-error and delayed-arrival reporting.
 
 For the current WSL toolchain, `bash sim/run_regression_wsl.sh` runs the AXI,
 protocol, G1, six-axis offline guard, connected G2, and both CLI mock suites.
+`bash sim/run_g3_offline_plan_guard.sh` additionally pins the G3 offline gate in
+`scripts/g3_offline_plan.py`: the empty station template must be rejected, a plan
+without `id5_fault_cleared_by_operator` must be rejected, an ID 5 target outside
+the measured range must be rejected (which also proves `safe_min`/`safe_max` were
+actually read, not skipped), a confirmed plan must pass `--step standby` and emit
+only one `MANUAL_REVIEW_ONLY` command with `motion_executed=0`, and a post-standby
+step must be rejected without `--log`. That checker needs `tomllib`, so the script
+carries a strict fail-closed fallback for hosts that only ship Python 3.10.
 The descriptor guard uses packed 32-bit axis arrays so Verilator 5.008 observes
 post-initialization changes at the module port; ABI 09 also tests its connected
 six-axis controller path.
@@ -76,4 +84,8 @@ ABI 10 另验证标定 +20 仅前进 6 count 不能通过、目标 ±5 边界、
 
 ABI 11 新增 `tb_g2_board_limits`：使用实际六轴综合常量逐轴覆盖最小值、最大值及相邻越界值（ID 5 包括 0/4000），并检查速度原始字段 0/500/1500/1501、物理禁发和 ID 2 边界外标定不得发 WRITE。`tb_rtcs_g1_ttl_top` 在禁发时读回 `calibrated_mask=0x3f` 与每轴 min/max/参考位置/速度上限。
 
-ABI 12 的 `tb_g2_six_axis_controller` 验证六轴发前 READ、历史 fault 9 或 READ 失败后再次显式 SYNC、起点已在宽容差内却无位置变化时 fault 16，以及 stop 的 fault 5 在保持广播前后分别保留失败 ID、WRITE 状态和引擎故障码。`tb_rtcs_g2_one_servo` 验证单轴现场起点、可配置容差下的实际位移与静止误判拒绝。`tb_axi_lite_regs` 检查 0x100 以上新寄存器与 ABI 地址不混叠。CLI mock 检查非法容差/观察期发前拒绝、实际位移与目标误差输出，以及广播 ACK 显示为不适用。完整离线回归：`bash sim/run_regression_wsl.sh`。
+当前 ABI 14 的 `tb_g2_six_axis_controller` 验证六轴绝对命令先 WRITE、失败 READ 发生在发后且保留 WRITE 状态、六轴连续三轮有效到位，以及 stop/相对标定功能性发前 READ。`tb_rtcs_g2_one_servo` 验证单轴先 WRITE、正常 ACK 和三次发后有效到位反馈、目标已在误差带内的绝对命令，以及超时不自动重发。`tb_axi_lite_regs` 检查 0x100 以上寄存器与 ABI 地址不混叠。CLI mock 检查无起点时仍可按反馈报告成功、缺 ACK/缺反馈/缺任一轴到位时拒绝 OK、原始 ERROR 和广播 ACK 不适用。完整离线回归：`bash sim/run_regression_wsl.sh`。
+
+G3 起步的 `diagnose` CLI mock 验证六轴只读成功、校验通过但舵机 ERROR 非零时保留原始错误字节与位置、其他 READ 故障时标记位置不可用，并确认 `--execute` 被拒绝且不触发 G2 WRITE。
+
+ABI 13 的故障字节锁存能力在 ABI 14 保留：相对标定或 stop 的发前 READ、单播 WRITE 应答和发后 READ 均检查故障 ID、阶段及 `DIAG[23:16]`，下一次显式提交须清除旧诊断。绝对命令没有发前 READ 阶段。CLI mock 确认广播故障输出 `servo_error_raw`，同时保持 `unicast_ack=NOT_APPLICABLE_BROADCAST`。

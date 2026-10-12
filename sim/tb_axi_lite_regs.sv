@@ -72,6 +72,7 @@ module tb_axi_lite_regs;
     .g1_status(g1_status), .g1_result(g1_result), .g1_fault(g1_fault),
     .g2_status(g2_status), .g2_fault(g2_fault), .g2_feedback(g2_feedback),
     .g2_start(32'd871),
+    .g2_diag(32'h0000_0103),
     .g2_six_log_count(32'h0003_0003),
     .g2_six_log_data(32'h1000_0375),
     .g2_six_log_elapsed(32'd5000000),

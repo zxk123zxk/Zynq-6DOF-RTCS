@@ -59,7 +59,7 @@ module tb_rtcs_g1_safe_top;
     repeat (5) @(negedge clk);
     rst_n = 1;
     read32(32'h00, value);
-    if (value != 32'h5254_000c) $fatal(1, "wrong G1 ABI");
+    if (value != 32'h5254_000e) $fatal(1, "wrong G1 ABI");
     read32(32'h5c, value);
     if (value[3] !== 1'b1) $fatal(1, "physical-disabled status missing");
 

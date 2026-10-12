@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "entries": [
+    {"name":"standby", "observed_at":null, "motion_output_file":null, "evidence":null, "observed_task_success":false, "operator_confirmed":false},
+    {"name":"approach", "observed_at":null, "motion_output_file":null, "evidence":null, "observed_task_success":false, "operator_confirmed":false},
+    {"name":"grasp", "observed_at":null, "motion_output_file":null, "evidence":null, "object_secured_observed":false, "observed_task_success":false, "operator_confirmed":false},
+    {"name":"lift", "observed_at":null, "motion_output_file":null, "evidence":null, "observed_task_success":false, "operator_confirmed":false},
+    {"name":"place", "observed_at":null, "motion_output_file":null, "evidence":null, "observed_task_success":false, "operator_confirmed":false},
+    {"name":"exit", "observed_at":null, "motion_output_file":null, "evidence":null, "observed_task_success":false, "operator_confirmed":false}
+  ]
+}

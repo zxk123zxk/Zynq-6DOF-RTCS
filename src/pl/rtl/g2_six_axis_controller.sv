@@ -1,4 +1,4 @@
-// ABI 12 六轴路径。标定限位是综合时常量；默认掩码为零，广播运动硬拒绝。
+// ABI 14 六轴路径。标定限位是综合时常量；默认掩码为零，广播运动硬拒绝。
 // 命令 1=SYNC WRITE，2=现场 READ 后单轴小步，3=READ 六轴后广播保持。
 module g2_six_axis_controller #(
   parameter logic [5:0] CALIBRATED_MASK = 6'b0,
@@ -71,6 +71,7 @@ module g2_six_axis_controller #(
   logic [7:0] feedback_id;
   logic [7:0] invalid_speed_axis;
   logic [7:0] invalid_tolerance_axis, observe_saved, phase, engine_fault_saved;
+  logic [7:0] servo_error_saved;
   logic [5:0][15:0] tolerance_saved, start_saved;
   logic [5:0] start_valid, feedback_valid, changed_mask, inband_mask;
   logic motion_ok, missing_change, all_last_inband, all_feedback_valid;
@@ -100,7 +101,7 @@ module g2_six_axis_controller #(
     {16'd0, start_saved[result_index-8'd1]} : 32'd0;
   assign result_flags = {2'd0, inband_mask, 2'd0, changed_mask,
                          2'd0, feedback_valid, 2'd0, start_valid};
-  assign diag = {16'd0, phase, 4'd0, engine_fault_saved[3:0]};
+  assign diag = {8'd0, servo_error_saved, phase, 4'd0, engine_fault_saved[3:0]};
   assign arrival_band = tolerance_saved[feedback_axis];
   for (genvar axis = 0; axis < 6; axis++) begin : feedback_assign
     assign feedback[axis] = feedback_reg[axis];
@@ -168,6 +169,7 @@ module g2_six_axis_controller #(
       tolerance_saved <= {6{16'd30}}; observe_saved <= 8'd50;
       start_saved <= '0; start_valid <= 0; feedback_valid <= 0;
       changed_mask <= 0; inband_mask <= 0; phase <= 0; engine_fault_saved <= 0;
+      servo_error_saved <= 0;
       candidate_target <= '0;
       for (int i = 0; i < 6; i++) feedback_reg[i] <= 0;
     end else if (!physical_enabled && state != IDLE) begin
@@ -180,12 +182,12 @@ module g2_six_axis_controller #(
       cycle_in_band <= 1; deadline_saved <= deadline;
       start_saved <= '0; start_valid <= 0; feedback_valid <= 0;
       changed_mask <= 0; inband_mask <= 0;
-      phase <= 8'd1; engine_fault_saved <= 0;
+      phase <= 8'd1; engine_fault_saved <= 0; servo_error_saved <= 0;
       fault_code <= 0; fault_axis <= 0;
     end else if (command != 0 && state == IDLE) begin
       done_flag <= 0; error_flag <= 0; sent_flag <= 0;
       fault_code <= 0; fault_axis <= 0; samples <= 0;
-      phase <= 0; engine_fault_saved <= 0;
+      phase <= 0; engine_fault_saved <= 0; servo_error_saved <= 0;
       start_saved <= '0; start_valid <= 0; feedback_valid <= 0;
       changed_mask <= 0; inband_mask <= 0;
       consecutive <= 0; cycle_in_band <= 1; axis_index <= 0;
@@ -261,7 +263,9 @@ module g2_six_axis_controller #(
           state <= IDLE;
         end else if (guard_accepted) begin
           for (int i = 0; i < 6; i++) position_saved[i] <= guard_target[i][15:0];
-          phase <= 8'd1; state <= FEEDBACK_START;
+          // Absolute targets need no start-position READ. Only relative
+          // calibration and stop retain their functional pre-WRITE READ.
+          phase <= 8'd2; state <= WRITE_START;
         end
       end
       STOP_CLEAR: begin
@@ -276,6 +280,8 @@ module g2_six_axis_controller #(
       end
       CAL_READ_WAIT: if (engine_done) begin
         if (engine_fault != 0) begin
+          engine_fault_saved <= {4'd0, engine_fault};
+          servo_error_saved <= engine_servo_error;
           done_flag <= 1; error_flag <= 1; fault_code <= 8'd5;
           fault_axis <= cal_id; state <= IDLE;
         end else if (signed_goal[31:16] != 0) begin
@@ -312,6 +318,7 @@ module g2_six_axis_controller #(
       WRITE_WAIT: if (engine_done) begin
         if (engine_fault != 0) begin
           engine_fault_saved <= {4'd0, engine_fault};
+          servo_error_saved <= engine_servo_error;
           done_flag <= 1; error_flag <= 1; fault_code <= 8'd8;
           fault_axis <= mode == 2'd2 ? cal_id : 8'd0;
           state <= IDLE;
@@ -333,7 +340,11 @@ module g2_six_axis_controller #(
       FEEDBACK_START: if (mode == 2'd3 && !sent_flag && now_ticks >= deadline_saved) begin
         done_flag <= 1; error_flag <= 1; fault_code <= 8'd4; state <= IDLE;
       end else state <= FEEDBACK_WAIT;
-      FEEDBACK_WAIT: if (now_ticks >= observe_end && sent_flag) begin
+      FEEDBACK_WAIT: begin
+        // Arm the next observation delay on READ completion. Its enable must
+        // not depend on the current position comparison or stability result.
+        if (engine_done) delay_count <= 23'(FEEDBACK_INTERVAL_TICKS);
+        if (now_ticks >= observe_end && sent_flag) begin
         done_flag <= 1; error_flag <= 1;
         fault_code <= all_last_inband && all_feedback_valid && missing_change ?
                       8'd16 : 8'd9;
@@ -345,6 +356,7 @@ module g2_six_axis_controller #(
           fault_axis <= cal_id; state <= IDLE;
         end else if (engine_fault != 0) begin
           engine_fault_saved <= {4'd0, engine_fault};
+          servo_error_saved <= engine_servo_error;
           if (mode == 2'd2 && sent_flag) begin
             log_data_mem[log_count[6:0]] <= {3'd0, 1'b0, engine_fault,
                                             engine_servo_error, 16'd0};
@@ -363,7 +375,7 @@ module g2_six_axis_controller #(
           end
           feedback_reg[feedback_axis] <=
             {8'd0, engine_servo_error, engine_position};
-          if ((mode == 2'd3 || mode == 2'd1) && !sent_flag) begin
+          if (mode == 2'd3 && !sent_flag) begin
             start_saved[axis_index] <= engine_position;
             start_valid[axis_index] <= 1;
             if (mode == 2'd3) begin
@@ -374,7 +386,8 @@ module g2_six_axis_controller #(
           end else begin
             samples <= samples + 1'b1;
             feedback_valid[feedback_axis] <= 1;
-            if (engine_position != start_saved[feedback_axis])
+            if (start_valid[feedback_axis] &&
+                engine_position != start_saved[feedback_axis])
               changed_mask[feedback_axis] <= 1;
             inband_mask[feedback_axis] <=
               (engine_position > position_saved[feedback_axis] ?
@@ -390,7 +403,7 @@ module g2_six_axis_controller #(
           if (mode != 2'd2 && axis_index != 3'd5) begin
             axis_index <= axis_index + 1'b1;
             state <= FEEDBACK_START;
-          end else if ((mode == 2'd3 || mode == 2'd1) && !sent_flag) begin
+          end else if (mode == 2'd3 && !sent_flag) begin
             axis_index <= 0;
             phase <= 8'd2; state <= WRITE_START;
           end else if (cycle_in_band && motion_ok &&
@@ -402,15 +415,14 @@ module g2_six_axis_controller #(
             end else begin
               consecutive <= consecutive + 1'b1;
               cycle_in_band <= 1; axis_index <= 0;
-              delay_count <= 23'(FEEDBACK_INTERVAL_TICKS);
               state <= FEEDBACK_DELAY;
             end
           end else begin
             consecutive <= 0; cycle_in_band <= 1; axis_index <= 0;
-            delay_count <= 23'(FEEDBACK_INTERVAL_TICKS);
             state <= FEEDBACK_DELAY;
           end
         end
+      end
       end
       default: state <= IDLE;
     endcase

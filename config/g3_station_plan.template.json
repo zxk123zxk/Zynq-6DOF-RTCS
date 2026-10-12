@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "abi": "0x5254000E",
+  "station": {
+    "workspace_id": null,
+    "measured_boundary": null,
+    "preflight": {
+      "probe_log": null,
+      "limits_log": null,
+      "diagnose_log": null,
+      "torque_status_id5_log": null,
+      "joint_directions_log": null,
+      "payload_obstacles_log": null,
+      "software_stop_latency_log": null,
+      "independent_power_cut_estop_log": null,
+      "operator_confirmed": false
+    },
+    "gripper_servo_id": 6,
+    "gripper_actuator_id": null,
+    "gripper_mapping_confirmed": false,
+    "gripper_manual_procedure": null,
+    "id5_fault_cleared_by_operator": false,
+    "id5_clearance_evidence": null,
+    "operator_confirmed": false,
+    "evidence": null
+  },
+  "steps": [
+    {"name":"standby", "workspace_id":null, "target_count":null, "speed_raw":null, "time_raw":null, "measured_at":null, "path_clear_confirmed":false, "operator_confirmed":false, "evidence":null},
+    {"name":"approach", "workspace_id":null, "target_count":null, "speed_raw":null, "time_raw":null, "measured_at":null, "path_clear_confirmed":false, "operator_confirmed":false, "evidence":null},
+    {"name":"grasp", "workspace_id":null, "target_count":null, "speed_raw":null, "time_raw":null, "measured_at":null, "path_clear_confirmed":false, "operator_confirmed":false, "evidence":null},
+    {"name":"lift", "workspace_id":null, "target_count":null, "speed_raw":null, "time_raw":null, "measured_at":null, "path_clear_confirmed":false, "operator_confirmed":false, "evidence":null},
+    {"name":"place", "workspace_id":null, "target_count":null, "speed_raw":null, "time_raw":null, "measured_at":null, "path_clear_confirmed":false, "operator_confirmed":false, "evidence":null},
+    {"name":"exit", "workspace_id":null, "target_count":null, "speed_raw":null, "time_raw":null, "measured_at":null, "path_clear_confirmed":false, "operator_confirmed":false, "evidence":null}
+  ]
+}

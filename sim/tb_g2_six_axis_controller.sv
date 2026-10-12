@@ -24,6 +24,8 @@ module tb_g2_six_axis_controller;
   logic [15:0] live_position [0:5];
   logic force_far=0, fail_id3=0, fail_cal_feedback_id3=0, fail_write=0;
   logic fail_stop_feedback_id3=0, stop_write_seen=0;
+  logic fail_status_post_id3=0, fail_status_post_id5=0;
+  logic fail_status_cal_ack=0;
   integer cal_feedback_shortfall=0;
   integer count_down=0, write_count=0, read_count=0;
   logic [7:0] pending_op, pending_id;
@@ -78,7 +80,8 @@ module tb_g2_six_axis_controller;
   // 独立假引擎：一次 start 后三拍返回，记录每次 WRITE 和 READ。
   always @(posedge clk) begin
     if (!rst_n) begin
-      engine_done <= 0; engine_fault <= 0; engine_position <= 0;
+      engine_done <= 0; engine_fault <= 0; engine_servo_error <= 0;
+      engine_position <= 0;
       count_down <= 0; write_count <= 0; read_count <= 0;
       pending_op <= 0; pending_id <= 0; cal_write_seen <= 0;
       stop_write_seen <= 0;
@@ -88,7 +91,8 @@ module tb_g2_six_axis_controller;
     end else if (engine_abort) begin
       engine_done <= 0; count_down <= 0;
     end else if (engine_start) begin
-      engine_done <= 0; engine_fault <= 0; count_down <= 3;
+      engine_done <= 0; engine_fault <= 0; engine_servo_error <= 0;
+      count_down <= 3;
       pending_op <= engine_op; pending_id <= engine_id;
       if (engine_op == 2) read_count <= read_count+1;
       else begin
@@ -104,12 +108,20 @@ module tb_g2_six_axis_controller;
       if (count_down == 1) begin
         engine_done <= 1;
         if (pending_op == 8 && fail_write) engine_fault <= 3;
+        if (pending_op == 8 && fail_status_cal_ack) begin
+          engine_fault <= 8; engine_servo_error <= 8'h40;
+        end
         if (pending_op == 2) begin
           if (fail_id3 && pending_id == 3) engine_fault <= 3;
           else if (fail_stop_feedback_id3 && pending_id == 3 && stop_write_seen)
             engine_fault <= 3;
           else if (fail_cal_feedback_id3 && pending_id == 3 && cal_write_seen)
             engine_fault <= 3;
+          else if (fail_status_post_id3 && pending_id == 3 && write_count != 0) begin
+            engine_fault <= 8; engine_servo_error <= 8'h12;
+          end else if (fail_status_post_id5 && pending_id == 5 && write_count != 0) begin
+            engine_fault <= 8; engine_servo_error <= 8'h24;
+          end
           else if (force_far) engine_position <= 16'd3000;
           else if (pending_id == 2 && !cal_write_seen) engine_position <= 16'd2000;
           else if (pending_id == 2 && cal_write_seen)
@@ -171,29 +183,29 @@ module tb_g2_six_axis_controller;
     repeat (3) @(negedge clk); rst_n=1;
     fail_id3=1;
     submit(1); wait_done();
-    if (fault[7:0]!=5 || fault[15:8]!=3 || write_count!=0 || diag[15:8]!=1)
-      $fatal(1,"READ fault did not identify ID 3 fault=%h writes=%0d diag=%h",
+    if (fault[7:0]!=5 || fault[15:8]!=3 || write_count!=1 || diag[15:8]!=3)
+      $fatal(1,"absolute WRITE was blocked by READ or lost ID 3 fault=%h writes=%0d diag=%h",
              fault,write_count,diag);
     fail_id3=0;
     submit(1); wait_done();
-    if (status[2] || write_count!=1)
+    if (status[2] || write_count!=2)
       $fatal(1,"explicit SYNC after READ fault did not run");
     // 软件停止 READ 六轴后只发一帧保持广播。
     submit(3); wait_done();
-    if (status[2] || write_count!=2 || sync_position[1]!=2000)
+    if (status[2] || write_count!=3 || sync_position[1]!=2000)
       $fatal(1,"software stop did not read then hold");
     tolerance[1]=5;
     submit(2); wait_done();
     if (status[2] || cal_start!=2000 || engine_write_position!=2050 ||
-        write_count!=3 || feedback[1][15:0]!=2050)
+        write_count!=4 || feedback[1][15:0]!=2050)
       $fatal(1,"live 50-count calibration failed");
     submit(2); wait_done();
     if (status[2] || cal_start!=2050 || engine_write_position!=2100 ||
-        write_count!=4)
+        write_count!=5)
       $fatal(1,"second explicit calibration did not reread live start");
     delta_raw=51;
     submit(2); wait_done();
-    if (fault[7:0]!=3 || write_count!=4 || cal_log_count[7:0]!=0 ||
+    if (fault[7:0]!=3 || write_count!=5 || cal_log_count[7:0]!=0 ||
         cal_log_count[16] || cal_log_count[17])
       $fatal(1,"oversized calibration step emitted WRITE or retained stale log");
     // +20 仅走 6 count，虽在旧 ±15 带内，也必须在 5 秒后报 fault 9。
@@ -244,10 +256,11 @@ module tb_g2_six_axis_controller;
     target[0]=2005; tolerance[0]=30;
     target[1]=2000;
     submit(1); wait_done();
-    if (fault[7:0]!=16 || write_count!=1 ||
-        result_flags[5:0]!=6'h3f || result_flags[29:24]!=6'h3f ||
-        result_flags[16]==1)
-      $fatal(1,"start already in tolerance falsely claimed motion");
+    if (status[2] || write_count!=1 ||
+        result_flags[5:0]!=6'h00 || result_flags[13:8]!=6'h3f ||
+        result_flags[29:24]!=6'h3f || result_flags[16]==1)
+      $fatal(1,"stable absolute feedback was rejected or claimed a start snapshot status=%h fault=%h result=%h writes=%0d",
+             status,fault,result_flags,write_count);
     target[0]=2000;
     submit(1); wait_done();
     if (status[2] || write_count!=2)
@@ -268,6 +281,31 @@ module tb_g2_six_axis_controller;
     submit(3); wait_done();
     if (status[2] || write_count!=2)
       $fatal(1,"stop after fault required reset");
+    @(negedge clk); rst_n=0;
+    repeat (3) @(negedge clk); rst_n=1;
+    fail_status_post_id3=1;
+    submit(1); wait_done();
+    if (fault != 32'h0000_0305 || !status[4] ||
+        diag[23:16]!=8'h12 || diag[15:8]!=3 || diag[3:0]!=8 || write_count!=1)
+      $fatal(1,"post-WRITE servo ERROR byte/ID lost fault=%h diag=%h",fault,diag);
+    fail_status_post_id3=0;
+    fail_status_post_id5=1;
+    submit(1); wait_done();
+    if (fault != 32'h0000_0505 || !status[4] ||
+        diag[23:16]!=8'h24 || diag[15:8]!=3 || diag[3:0]!=8 || write_count!=2)
+      $fatal(1,"post-WRITE servo ERROR byte/ID lost fault=%h diag=%h",fault,diag);
+    fail_status_post_id5=0;
+    submit(1); wait_done();
+    if (status[2] || diag[23:16]!=0 || diag[3:0]!=0 || write_count!=3)
+      $fatal(1,"next explicit command retained prior servo ERROR");
+    @(negedge clk); rst_n=0;
+    repeat (3) @(negedge clk); rst_n=1;
+    axis_id=3; delta_raw=20; fail_status_cal_ack=1;
+    submit(2); wait_done();
+    if (fault != 32'h0000_0308 || !status[4] || cal_log_count[17] ||
+        diag[23:16]!=8'h40 || diag[15:8]!=2 || diag[3:0]!=8 || write_count!=1)
+      $fatal(1,"unicast ACK servo ERROR byte/ID lost fault=%h diag=%h",fault,diag);
+    fail_status_cal_ack=0;
     $display("TB_G2_SIX_AXIS_CONTROLLER_PASS writes=%0d reads=%0d",
       write_count,read_count);
     $finish;

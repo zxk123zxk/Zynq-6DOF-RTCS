@@ -53,7 +53,7 @@ module tb_rtcs_g1_ttl_top;
   initial begin
     repeat (5) @(negedge clk); rst_n = 1;
     read32(32'h00, value);
-    if (value !== 32'h5254_000c) $fatal(1, "new pinout ABI not visible");
+    if (value !== 32'h5254_000e) $fatal(1, "new pinout ABI not visible");
     read32(32'h5c, value);
     if (!value[3]) $fatal(1, "unstrapped TX not disabled");
     read32(32'hd8, value);

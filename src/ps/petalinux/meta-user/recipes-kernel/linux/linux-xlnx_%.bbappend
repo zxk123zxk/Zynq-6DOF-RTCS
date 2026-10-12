@@ -1,2 +1,5 @@
 FILESEXTRAPATHS:prepend := "${THISDIR}/linux-xlnx:"
-SRC_URI += "file://usbserial.cfg"
+SRC_URI += "file://usbserial.cfg file://uio.cfg"
+KERNEL_MODULE_AUTOLOAD += "uio_pdrv_genirq"
+KERNEL_MODULE_PROBECONF += "uio_pdrv_genirq"
+module_conf_uio_pdrv_genirq = "options uio_pdrv_genirq of_id=generic-uio"

@@ -39,7 +39,7 @@ module rtcs_top #(
 );
   // 这些内部信号是 AXI 寄存器组与后续运动/总线模块之间的接口。
   import hx30hm_protocol_pkg::*;
-  // ABI 12：每个显式提交只发送一帧运动 WRITE；容差与观察期随命令快照。
+  // ABI 14：每个显式提交只发送一帧运动 WRITE；容差与观察期随命令快照。
   localparam logic [63:0] G2_DEADLINE_MAX   = 64'd200_000_000;
   function automatic logic [15:0] abs_diff16(input logic [15:0] a, input logic [15:0] b);
     abs_diff16 = (a >= b) ? (a - b) : (b - a);
@@ -66,6 +66,7 @@ module rtcs_top #(
   logic [63:0] g2_deadline;
   logic g2_commit, g2_cancel;
   logic [31:0] g2_status, g2_fault, g2_feedback;
+  logic [31:0] g2_diag;
   logic [31:0] six_status, six_fault, six_cal_start;
   logic [31:0] six_log_count, six_log_data, six_log_elapsed;
   logic [31:0] six_start, six_result, six_diag;
@@ -82,7 +83,7 @@ module rtcs_top #(
   logic [15:0] six_engine_position, six_engine_speed, six_engine_time;
   logic [5:0][15:0] sync_position, sync_speed, sync_time;
   logic [5:0][31:0] six_target_packed, six_param_packed;
-  typedef enum logic [2:0] {G2_IDLE, G2_READ_START, G2_READ_WAIT,
+  typedef enum logic [2:0] {G2_IDLE,
     G2_WRITE_START, G2_WRITE_WAIT, G2_FEEDBACK_DELAY,
     G2_FEEDBACK_START, G2_FEEDBACK_WAIT} g2_state_t;
   g2_state_t g2_state;
@@ -96,10 +97,16 @@ module rtcs_top #(
   logic g2_done, g2_error, g2_write_sent, g2_late;
   logic [7:0] g2_fault_code;
   logic [15:0] g2_last_position;
-  logic [15:0] g2_start_position, g2_tolerance_saved;
+  logic [15:0] g2_tolerance_saved;
   logic [7:0] g2_observe_saved;
-  logic g2_start_valid, g2_feedback_valid, g2_position_changed, g2_write_ack;
+  logic g2_feedback_valid, g2_write_ack;
   logic [7:0] g2_last_servo_error;
+  // 单轴 G2 故障锁存：引擎故障码、舵机 ERROR 原始字节、故障轴与阶段。
+  // 写应答阶段的引擎故障码不再被压成 G2 fault=8 后丢失，供 PS 区分
+  // “应答超时/坏帧”与“舵机返回非零 ERROR”。布局：[23:16] ERROR、[15:8] 阶段、
+  // [7:4] 轴 ID、[3:0] 引擎故障码。
+  logic [7:0] g2_diag_servo, g2_diag_phase;
+  logic [3:0] g2_diag_axis, g2_diag_engine;
   logic engine_start, engine_clear;
   logic [7:0] engine_id, engine_op;
   logic [15:0] engine_position, engine_speed, engine_time;
@@ -126,7 +133,7 @@ module rtcs_top #(
     end
   end
 
-  // ABI 12 使用低 9 位外设内偏移，0x100 以上为结果诊断寄存器。
+  // ABI 14 使用低 9 位外设内偏移，0x100 以上为结果诊断寄存器。
   axi_lite_regs #(.AXI_ADDR_WIDTH(9), .AXIS_COUNT(AXIS_COUNT)) u_axi_lite_regs (
     .aclk(s_axi_aclk), .aresetn(s_axi_aresetn),
     .saxi_awaddr(s_axi_awaddr[8:0]), .saxi_awvalid(s_axi_awvalid), .saxi_awready(s_axi_awready),
@@ -137,7 +144,8 @@ module rtcs_top #(
     .hw_ticks(hw_ticks), .status(status), .irq_status(irq_status),
     .g1_status(g1_status), .g1_result(g1_result), .g1_fault(g1_fault),
     .g2_status(g2_status), .g2_fault(g2_fault), .g2_feedback(g2_feedback),
-    .g2_start({16'd0, g2_start_position}),
+    .g2_start(32'd0),
+    .g2_diag(g2_diag),
     .g2_six_status(six_status), .g2_six_fault(six_fault),
     .g2_six_cal_start(six_cal_start),
     .g2_six_cal_mask({26'd0, G2_CALIBRATED_MASK}),
@@ -217,7 +225,7 @@ module rtcs_top #(
   assign engine_start = six_busy ? six_engine_start : (g2_state == G2_IDLE) ?
     (g1_start && G1_TTL_PORTS && estop_n && !g2_commit && six_command == 0 &&
      !g1_busy && g1_path_allowed(g1_op)) :
-    ((g2_state == G2_READ_START || g2_state == G2_WRITE_START ||
+    ((g2_state == G2_WRITE_START ||
       g2_state == G2_FEEDBACK_START) && estop_n &&
      (g2_state != G2_WRITE_START || hw_ticks < g2_deadline_saved));
   assign engine_id = six_busy ? six_engine_id : g2_state == G2_IDLE ? g1_id : g2_id_saved;
@@ -232,13 +240,14 @@ module rtcs_top #(
                       g1_busy || (g2_state != G2_IDLE) || six_busy};
   assign g1_result = g1_op_blocked ? 32'd0 : {8'd0, g1_servo_error, g1_position};
   assign g1_fault = g1_op_blocked ? 32'd13 : {28'd0, g1_fault_code};
-  assign g2_status = {14'd0, g2_position_changed, g2_write_ack,
-    feedback_samples, g2_feedback_valid, g2_start_valid,
+  assign g2_status = {14'd0, 1'b0, g2_write_ack,
+    feedback_samples, g2_feedback_valid, 1'b0,
     g2_late, g2_write_sent,
     !(G1_TTL_PORTS && estop_n && s_axi_aresetn), g2_error, g2_done,
     (g2_state != G2_IDLE)};
   assign g2_fault = {24'd0, g2_fault_code};
   assign g2_feedback = {8'd0, g2_last_servo_error, g2_last_position};
+  assign g2_diag = {8'd0, g2_diag_servo, g2_diag_phase, g2_diag_axis, g2_diag_engine};
 
   // One physical bus engine is shared by G1 and G2. A G2 commit snapshots
   // every descriptor field; subsequent MMIO writes cannot change a frame.
@@ -264,10 +273,11 @@ module rtcs_top #(
       g2_write_sent <= 0; g2_late <= 0;
       g2_fault_code <= 0;
       g2_last_position <= 0; g2_last_servo_error <= 0;
-      g2_start_position <= 0; g2_tolerance_saved <= 16'd30;
+      g2_tolerance_saved <= 16'd30;
       g2_observe_saved <= 8'd50;
-      g2_start_valid <= 0; g2_feedback_valid <= 0;
-      g2_position_changed <= 0; g2_write_ack <= 0;
+      g2_feedback_valid <= 0; g2_write_ack <= 0;
+      g2_diag_engine <= 0; g2_diag_servo <= 0;
+      g2_diag_axis <= 0; g2_diag_phase <= 0;
     end else if (!estop_n || g2_cancel) begin
       if (g2_state != G2_IDLE) begin
         g2_done <= 1; g2_error <= 1;
@@ -289,8 +299,9 @@ module rtcs_top #(
           g2_write_sent <= 0; g2_late <= 0; feedback_samples <= 0;
           feedback_consecutive <= 0; g2_last_position <= 0;
           g2_last_servo_error <= 0;
-          g2_start_position <= 0; g2_start_valid <= 0;
-          g2_feedback_valid <= 0; g2_position_changed <= 0; g2_write_ack <= 0;
+          g2_feedback_valid <= 0; g2_write_ack <= 0;
+          g2_diag_engine <= 0; g2_diag_servo <= 0;
+          g2_diag_axis <= g2_id[3:0]; g2_diag_phase <= 8'd1;
           if (!G1_TTL_PORTS || g2_id < 32'd1 || g2_id > 32'd6 ||
               g2_target[31:16] != 0) begin
             g2_done <= 1; g2_error <= 1; g2_fault_code <= 8'd3;
@@ -319,37 +330,31 @@ module rtcs_top #(
             g2_tolerance_saved <= g2_expect[15:0];
             g2_observe_saved <= g2_expect[23:16];
             g2_deadline_saved <= g2_deadline;
-            g2_state <= G2_READ_START;
+            g2_state <= G2_WRITE_START;
           end
         end
       end else case (g2_state)
         G2_IDLE: ;
-        G2_READ_START: if (hw_ticks >= g2_deadline_saved) begin
-          g2_done <= 1; g2_error <= 1; g2_fault_code <= 8'd4;
-          g2_state <= G2_IDLE;
-        end else g2_state <= G2_READ_WAIT;
-        G2_READ_WAIT: if (g1_done) begin
-          if (g1_fault_code != 0) begin
-            g2_done <= 1; g2_error <= 1; g2_fault_code <= 8'd5;
-            g2_state <= G2_IDLE;
-          end else begin
-            g2_start_position <= g1_position;
-            g2_start_valid <= 1;
-            g2_state <= G2_WRITE_START;
-          end
-        end
         G2_WRITE_START: if (hw_ticks >= g2_deadline_saved) begin
           g2_done <= 1; g2_error <= 1; g2_fault_code <= 8'd4;
           g2_state <= G2_IDLE;
         end else begin
           g2_write_sent <= 1;
+          g2_diag_phase <= 8'd2;
           g2_observe_end <= hw_ticks + 64'(g2_observe_saved) *
                              64'(G2_OBSERVE_TIMEOUT_TICKS / 50);
           g2_state <= G2_WRITE_WAIT;
         end
         G2_WRITE_WAIT: if (g1_done) begin
           if (g1_fault_code != 0) begin
+            // 保留底层引擎故障码与舵机 ERROR 原始字节：不再让 G2 fault=8
+            // 吞掉“应答超时/坏帧”与“舵机返回非零 ERROR”的区别。
             g2_done <= 1; g2_error <= 1; g2_fault_code <= 8'd8;
+            g2_diag_engine <= g1_fault_code;
+            g2_diag_servo <= g1_servo_error;
+            g2_diag_axis <= g2_id_saved[3:0];
+            g2_diag_phase <= 8'd2;
+            g2_last_servo_error <= g1_servo_error;
             g2_state <= G2_IDLE;
           end else begin
             g2_write_ack <= 1;
@@ -359,32 +364,33 @@ module rtcs_top #(
         end
         G2_FEEDBACK_DELAY: if (hw_ticks >= g2_observe_end) begin
           g2_done <= 1; g2_error <= 1;
-          g2_fault_code <= g2_feedback_valid && !g2_position_changed &&
-            abs_diff16(g2_last_position,g2_target_saved) <= g2_tolerance_saved ?
-            8'd16 : 8'd9;
+          g2_fault_code <= 8'd9;
           g2_state <= G2_IDLE;
         end else if (feedback_delay == 0) g2_state <= G2_FEEDBACK_START;
         else feedback_delay <= feedback_delay - 1'b1;
         G2_FEEDBACK_START: g2_state <= G2_FEEDBACK_WAIT;
         G2_FEEDBACK_WAIT: if (hw_ticks >= g2_observe_end) begin
           g2_done <= 1; g2_error <= 1;
-          g2_fault_code <= g2_feedback_valid && !g2_position_changed &&
-            abs_diff16(g2_last_position,g2_target_saved) <= g2_tolerance_saved ?
-            8'd16 : 8'd9;
+          g2_fault_code <= 8'd9;
           g2_state <= G2_IDLE;
         end else if (g1_done) begin
           if (g1_fault_code != 0) begin
             g2_done <= 1; g2_error <= 1; g2_fault_code <= 8'd5;
+            g2_diag_engine <= g1_fault_code;
+            g2_diag_servo <= g1_servo_error;
+            g2_diag_axis <= g2_id_saved[3:0];
+            g2_diag_phase <= 8'd3;
             g2_state <= G2_IDLE;
           end else begin
             g2_last_position <= g1_position;
             g2_last_servo_error <= g1_servo_error;
+            g2_diag_engine <= 0;
+            g2_diag_servo <= g1_servo_error;
+            g2_diag_axis <= g2_id_saved[3:0];
+            g2_diag_phase <= 8'd3;
             g2_feedback_valid <= 1;
-            if (g1_position != g2_start_position) g2_position_changed <= 1;
             feedback_samples <= feedback_samples + 1'b1;
-            if (abs_diff16(g1_position, g2_target_saved) <= g2_tolerance_saved &&
-                (g2_target_saved == g2_start_position ||
-                 g2_position_changed || g1_position != g2_start_position)) begin
+            if (abs_diff16(g1_position, g2_target_saved) <= g2_tolerance_saved) begin
               if (feedback_consecutive == 2'd2) begin
                 g2_done <= 1;
                 if (hw_ticks > g2_deadline_saved) g2_late <= 1;

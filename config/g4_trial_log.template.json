@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "status": "not_started",
+  "g3_gate": {
+    "static_cycles_completed": 0,
+    "static_cycles_success": 0,
+    "six_axis_feedback_and_grasp_evidence": null,
+    "operator_confirmed": false
+  },
+  "setup": {
+    "camera_model": "Hiwonder TY-900408-V3.3 (0.3MP USB, no depth)",
+    "camera_calibration_file": null,
+    "camera_to_world_calibration_file": null,
+    "world_frame_definition": null,
+    "fk_ik_version": null,
+    "target_motion_profile": null,
+    "clock_sync_evidence": null,
+    "software_version": null,
+    "pl_abi": null
+  },
+  "linux_only_baseline": [],
+  "ps_pl_trials": [],
+  "fault_injection_trials": [],
+  "long_run_sessions": []
+}

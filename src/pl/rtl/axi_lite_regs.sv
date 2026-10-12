@@ -51,6 +51,7 @@ module axi_lite_regs #(
   input  logic [31:0]               g2_fault,
   input  logic [31:0]               g2_feedback,
   input  logic [31:0]               g2_start,
+  input  logic [31:0]               g2_diag,
   input  logic [31:0]               g2_six_status,
   input  logic [31:0]               g2_six_fault,
   input  logic [31:0]               g2_six_cal_start,
@@ -304,6 +305,7 @@ module axi_lite_regs #(
       REG_G2_FAULT:      axi_data_to_read = g2_fault;
       REG_G2_FEEDBACK:   axi_data_to_read = g2_feedback;
       REG_G2_START:      axi_data_to_read = g2_start;
+      REG_G2_DIAG:       axi_data_to_read = g2_diag;
       REG_G2_SIX_STATUS: axi_data_to_read = g2_six_status;
       REG_G2_SIX_FAULT: axi_data_to_read = g2_six_fault;
       REG_G2_SIX_DEADLINE_LO: axi_data_to_read = g2_six_deadline_reg[31:0];

@@ -10,7 +10,9 @@ package rtcs_pkg;
   // 0A：标定目标 ±5、逐条反馈日志、0x28 只读诊断及 ID 1..6 手动单轴。
   // 0B：实测六轴闭区间、原始速度上限和只读限位诊断。
   // 0C：命令结果独立化、可配置容差/观察期、起点及故障阶段诊断。
-  parameter logic [31:0] ID_VERSION = 32'h5254_000c;
+  // 0D：六轴诊断寄存器 [23:16] 锁存故障应答的舵机 ERROR 原始字节。
+  // 0E：绝对单轴/六轴直接 WRITE；起点有效位不再是绝对运动的前提。
+  parameter logic [31:0] ID_VERSION = 32'h5254_000e;
 
   // AXI4-Lite 寄存器字节偏移：与 PS 端 rtcs_registers.hpp 保持一致。
   localparam logic [7:0] REG_ID_VERSION    = 8'h00;
@@ -65,7 +67,15 @@ package rtcs_pkg;
   localparam logic [8:0] REG_G2_SIX_OBSERVE = 9'h104; // 10..100，单位 100 ms
   localparam logic [8:0] REG_G2_SIX_START = 9'h108; // LIMIT_ID 选轴，现场预读
   localparam logic [8:0] REG_G2_SIX_RESULT = 9'h10c; // 起点有效/反馈有效/位置变化掩码
-  localparam logic [8:0] REG_G2_SIX_DIAG = 9'h110; // 故障阶段、底层 READ/WRITE 故障
-  localparam logic [8:0] REG_G2_START = 9'h114; // 单轴现场预读
+  localparam logic [8:0] REG_G2_SIX_DIAG = 9'h110; // ERROR[23:16]、阶段[15:8]、引擎故障[3:0]
+  localparam logic [8:0] REG_G2_START = 9'h114; // ABI 0E 保留地址，绝对运动读值为 0
+  // 单轴 G2 故障锁存（0E 增量，只读，不改动任何既有寄存器语义，因此不升 ABI）：
+  //   [23:16] 故障应答里的舵机 ERROR 原始字节（0x41 状态）
+  //   [15:8]  发生阶段 1=提交后待发 2=发送/等待写应答 3=发后反馈
+  //   [7:4]   故障轴 ID
+  //   [3:0]   引擎故障码：3 应答超时 4 长度不符 5 停止位 6 应答ID不符 7 校验和 8 舵机ERROR非零
+  // 没有它时，rtcs_top 会把写阶段的全部引擎故障压成 G2 fault=8，操作者无法区分
+  // “舵机报了角度类错误”与“根本没收到应答/收到坏帧”。旧 PL 读该地址返回 0。
+  localparam logic [8:0] REG_G2_DIAG = 9'h118; // G2 单轴故障锁存，只读
 endpackage
 `endif
