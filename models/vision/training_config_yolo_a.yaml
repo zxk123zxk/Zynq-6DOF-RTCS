@@ -1,0 +1,24 @@
+# Reproducibility record only. The dataset itself is not distributed here.
+task: detect
+model: yolo11n.pt
+dataset_source: https://universe.roboflow.com/robocats/robot-arm-hxvrd/dataset/3
+dataset_version: 3
+dataset_license: CC-BY-4.0
+class_mapping:
+  0: cube
+  1: cylinder
+imgsz: 640
+epochs: 50
+actual_epochs: 36
+best_epoch: 21
+batch: 8
+device_used_for_training: 0
+workers: 2
+seed: 42
+patience: 15
+pretrained: true
+optimizer_requested: auto
+optimizer_selected: AdamW
+amp: true
+ultralytics_version: 8.4.43
+python_version: 3.12.4

@@ -32,3 +32,15 @@ data/captures/
 *.ila
 
 /Material_Library/
+
+# Python / vision local environments and generated outputs
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+vision_runs/
+
+# Vision weights require an explicit license review before distribution.
+/models/vision/*.pt
+!/models/vision/yolo_a_cube_cylinder_best.pt

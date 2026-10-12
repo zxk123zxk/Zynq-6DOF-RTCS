@@ -33,6 +33,7 @@ ABI 13 起在运动故障时保存舵机 ERROR 原始字节及 ID（ABI 0E 保�
 | --- | --- |
 | [src/pl/rtl/](src/pl/rtl/rtcs_top.sv) | AXI 寄存器、G2 六轴控制器、描述符检查、舵机协议与实际顶层 |
 | [src/ps/linux/apps/](src/ps/linux/apps/rtcs_pl_g2_six.c) | G1、G2 单轴、G2 六轴 UIO CLI |
+| [src/vision/](src/vision/) | cube/cylinder 多目标像素检测、USB Camera 与离线推理 |
 | [config/](config/g2_measured_limits.toml) | 安装状态实测限位和参考位置 |
 | [sim/](sim/README.md) | RTL、CLI mock、完整离线回归 |
 | [scripts/](scripts/build_vivado.ps1) | Vivado、XSA 导入和 PetaLinux SD 构建 |
@@ -42,3 +43,9 @@ ABI 13 起在运动故障时保存舵机 ERROR 原始字节及 ID（ABI 0E 保�
 | [artifacts/archive/](artifacts/archive/) | 旧 ABI 的 bit/XSA/SD 快照与操作记录；被取代的旧说明文档已清理，需要时从 git 历史取回 |
 
 当前构建使用 Vivado 2023.2 与 PetaLinux 2023.2。默认构建不导出舵机 IO；实际 TTL 镜像须用 Vivado 脚本的 Build/Ttl 选项，并保留独立舵机电源与物理禁发。G3 的轨迹引擎、FIFO 与硬件 IRQ 仍未实现（PS 侧软状态机承担任务编排）；100 次静态抓放与 P99 统计属归档轨，不是运动前置条件。
+
+## 视觉模块
+
+`src/vision/` 提供 YOLO A 与实验性 OpenCV 几何检测入口，类别固定为 `0=cube`、`1=cylinder`，支持一帧输出多个目标的类别、置信度、原图检测框和像素中心。正式权重位于 `models/vision/`；视觉子模块的 AGPL-3.0 范围、第三方署名和复现步骤见 [视觉模块文档](docs/vision/README.md)，该范围不自动重许可独立的 FPGA/控制模块。
+
+当前视觉结果不是毫米坐标或 Robot Base 坐标，也不提供 `yaw`；固定 Camera、真实 Homography 和最终传送带场景均尚未验收。视觉模块不会直接下发机械臂动作。
