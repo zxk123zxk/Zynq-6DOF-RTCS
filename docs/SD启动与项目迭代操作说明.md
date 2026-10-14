@@ -1,18 +1,18 @@
 # 当前 SD 镜像与板端命令
 
-本页记录的**已构建**镜像及下列哈希为 2026-10-12 离线重建的 ABI 0x5254000E；绝对目标不再要求发前 READ 成功。**该 ABI 已于 2026-10-12 上板实测**（`probe` 报 `abi=0x5254000e physical_tx=ENABLED`，ID 5 单轴远端运动成功，见 [G2](2.G2-six-axis-calibration.md)），不再禁止新旧混用——**但只允许使用本 ABI 0E 的 PL 与 CLI 组合，旧的 0D 组合一律弃用**。旧产物见[构建前归档](../artifacts/archive/g2-id5-angle-window-20261012/README.md)。J20-35/V15 接 BusLinker TX，J20-33/U20 接 BusLinker RX，J20-37 共地；J20-36/W15 到 J20-38/GND 是物理允许跳线。独立舵机电源开关与该跳线分开。所有舵机运动只由板端操作者执行。
+本页记录的**仓库 SD 镜像**于 2026-10-13 重建，ABI 为 `0x5254000E`，ID 6 PL 命令限位为 2050–3000，参考读值为 2092。**板端最后一次 `limits` 仍读出旧限位 1585–2500、reference 1585**；新镜像尚未上板验收。同一 ABI 不能区分两版限位，必须核对逐轴 `limits`。绝对目标不要求发前 READ 成功，0D 旧版不可混用。旧版 ABI 0E 镜像见[本次归档](../artifacts/archive/g3-id6-old-limits-abi0e-20261013/README.md)。J20-35/V15 接 BusLinker TX，J20-33/U20 接 BusLinker RX，J20-37 共地；J20-36/W15 到 J20-38/GND 是物理允许跳线。独立舵机电源开关与该跳线分开。所有舵机运动只由板端操作者执行。
 
 ## 交付文件
 
-2026-10-12 用 Vivado 2023.2 重建 ABI 0E：TX=U20、RX=V15、禁发=W15、唯一 OBUFT；setup/hold 最差裕量分别为 **+0.249/+0.094 ns**，无失败端点。XSA 内嵌 bitstream 与独立文件 SHA256 一致；PetaLinux 2023.2 导入该 XSA，打包脚本核对 `system.bit` 与独立文件逐字节一致、rootfs 三套 CLI 与 UIO 模块/配置齐备、设备树包含 RTCS `generic-uio` 节点。`artifacts/sd/SHA256SUMS` 已校验通过。首次 Vivado 尝试因 setup −0.067 ns 被时序门禁拒绝，修正六轴反馈延时计数器的使能路径后重新综合才通过；失败尝试没有导出交付 bit/XSA。
+2026-10-13 用 Vivado 2023.2 重建 ABI 0E：TX=U20、RX=V15、禁发=W15、唯一 OBUFT；setup/hold 最差裕量分别为 **+0.499/+0.042 ns**，无失败端点。PetaLinux 2023.2 导入新 XSA，打包脚本核对 `system.bit` 与独立 bitstream 逐字节一致、rootfs 三套 CLI 与 UIO 模块/配置齐备、设备树包含 RTCS `generic-uio` 节点。`artifacts/sd/SHA256SUMS` 已校验通过。旧镜像及其哈希见[归档](../artifacts/archive/g3-id6-old-limits-abi0e-20261013/README.md)。
 
 | 文件 | SHA256 |
 | --- | --- |
-| [rtcs_system.bit](../artifacts/hw/rtcs_system.bit) | 0653954c619f330c8f54ecdd62f5966c8c0b420a7e8edb6e10163798ca678b22 |
-| [rtcs_system.xsa](../artifacts/hw/rtcs_system.xsa) | 7811e2fd9a4fd2a78c7ca47955599c730e43d07e19154d24220cea2b0b344a72 |
-| [BOOT.BIN](../artifacts/sd/BOOT.BIN) | 0168690f8999d1c9be03e9e44c3113c2168663b6ac108053828b6eefd14fe607 |
-| [image.ub](../artifacts/sd/image.ub) | 1504b229dd41558d42603bf0ff5e1066f01b8a974ea9aa733c95a1a6fd5fc95c |
-| [boot.scr](../artifacts/sd/boot.scr) | 81f427907b79f9120af4a9506ad9868af17044f13e1f3adee31906b8befb7441 |
+| [rtcs_system.bit](../artifacts/hw/rtcs_system.bit) | 3f198ff2ed30b65b4e0686b005a8f92c7f4af3d35164a16c790ea9a91698d6a7 |
+| [rtcs_system.xsa](../artifacts/hw/rtcs_system.xsa) | b096eb32eada36d33ee7b2897678ce3dc28a65dd2a6ca66a3cd3d63b7fe8e38a |
+| [BOOT.BIN](../artifacts/sd/BOOT.BIN) | c03cbf619b2d9c1eb4886fb4922fc4ce28b20ed0bcb8e289abd2b28e79645836 |
+| [image.ub](../artifacts/sd/image.ub) | f0274a0bfdcc40669e88ceba21dfc93d78969f37448453b8c7e4c41700c4b16a |
+| [boot.scr](../artifacts/sd/boot.scr) | a05b62f308bf0f5685aeebaec0f17f323dbaa7b668b2327abfa159ce1ffc8c49 |
 
 复制三个 SD 文件到 FAT32 启动分区；复制前后按 [SHA256SUMS](../artifacts/sd/SHA256SUMS)核对。源码重建入口为 [Vivado 脚本](../scripts/build_vivado.ps1)的 Build/Ttl 选项，以及 [PetaLinux XSA 导入](../scripts/petalinux/create_project.sh)和 [SD 打包](../scripts/petalinux/build_sd_image.sh)。旧 ABI 镜像和 CLI 不混用。
 
@@ -32,9 +32,9 @@
     sudo rtcs-pl-g2-six --uio /dev/uio0 diagnose
     sudo rtcs-pl-g2-six --uio /dev/uio0 torque-status --id 5
 
-`diagnose` 不需要 `--execute`，只对 ID 1–6 发 READ_POSITION，不发运动 WRITE。保存六行 `diagnose id=` 和末行 `RTCS_PL_G2_SIX_DIAG`，同时保存 ID 5 扭矩开关只读值。六轴均正常时末行应为 `OK issues=0 read_only=1 write_sent=0`；任一舵机 ERROR 或 READ 故障时为 `INCOMPLETE` 并返回非零。特别记录 ID 2、5 的原始 `servo_error`。如有异常，停止 G3 运动准备，先排查后再次只读确认；不要从旧日志推断具体故障原因或自动重发旧目标。
+`diagnose` 不需要 `--execute`，只对 ID 1–6 发 READ_POSITION，不发运动 WRITE。保存六行 `diagnose id=` 和末行 `RTCS_PL_G2_SIX_DIAG`，同时保存 ID 5 扭矩开关只读值。六轴均正常时末行应为 `OK issues=0 read_only=1 write_sent=0`；任一舵机 ERROR 或 READ 故障时为 `INCOMPLETE` 并返回非零。原始 `servo_error` 用于诊断当次 READ；它不锁死下一条显式运动命令，也不要求先重复诊断才可继续。
 
-只有操作者依据**当次** diagnose 和机械空间明确选择限位内的小幅六轴目标后，才做一次受控 `move-six`。保存每轴 target/last/target_error、有效位与 `command_result`；ABI 0E 显式绝对运动不采起点，start/actual_delta/position_change_mask 应为 `UNAVAILABLE`。若报 `engine_fault=8`，应保存 `fault_id`、`phase`、`servo_error_raw=0xNN`、`write_sent`；广播仍显示 `unicast_ack=NOT_APPLICABLE_BROADCAST`。任意 ERR、物理干涉或异常动作均停止后续提交；故障不会自动重发。
+操作者可依据机械空间选择限位内的六轴目标并执行 `move-six`，不要求发前 READ 起点。保存每轴 target/last/target_error、有效位与 `command_result`；ABI 0E 显式绝对运动的 start/actual_delta/position_change_mask 为 `UNAVAILABLE`。若报 `engine_fault=8`，保存 `fault_id`、`phase`、`servo_error_raw=0xNN`、`write_sent`；广播仍显示 `unicast_ack=NOT_APPLICABLE_BROADCAST`。ERR 属于当次命令，不禁止后续显式提交；实际物理干涉或失控时使用独立急停。
 
 ## 核心板端验收代码
 
@@ -73,4 +73,4 @@
 
    只有出现 RTCS_PL_G2_SIX_OK command=stop 才算软件停止成功。fault 5 必须看 fault_id、phase、engine_fault 和 write_sent，以区分保持广播前后的 READ 失败。独立断电急停另行在支撑受载关节的条件下实测，软件 stop 不能代替它。
 
-任一 ABI/限位不符、ID 缺失、物理禁发状态异常、ERR、干涉或异常动作均停止后续提交并保留日志；故障不会自动重试。G2 阶段总结与核心文件目录见 [G2 说明](2.G2-six-axis-calibration.md)。历史多版本操作记录与旧镜像见 [artifacts/archive/](../artifacts/archive/)。
+ABI/限位不符时先选用正确镜像；当次 ERR 原样报告，不转成 OK，也不设跨命令锁死。实际机械干涉、失控或供电异常由操作者使用独立急停。G2 阶段总结与核心文件目录见 [G2 说明](2.G2-six-axis-calibration.md)。历史多版本操作记录与旧镜像见 [artifacts/archive/](../artifacts/archive/)。

@@ -40,6 +40,7 @@ __pycache__/
 .venv/
 venv/
 vision_runs/
+audit_runs/
 
 # Vision weights require an explicit license review before distribution.
 /models/vision/*.pt

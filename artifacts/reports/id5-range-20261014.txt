@@ -1,0 +1,126 @@
+# ID 5 可用区间实测 —— 2026-10-14（ABI 0x5254000E 板端）
+
+**文件状态：操作者终端粘贴的摘录，不是板端完整原始文件。**
+
+- **来源**：操作者在板端串口/SSH 会话中执行后粘贴的终端输出。
+- **已知粘贴缺陷**：粘贴过程中出现换行错位，例如 `probesudo rtcs-pl-g2-six ...`（两条命令被粘连）、
+  `tee -asample=9 ... /tmp/id5-range-20261014.txt`（sample 行插进了命令中间）。这些是**转录缺陷**，
+  不是板端行为异常；判读只能依据 `commit=` / `result=` / `diagnostic=` / `RTCS_PL_G2_OK` 四类整行。
+- **待补**：板端 `/tmp/id5-range-20261014.txt` 是权威原始文件，应用
+  `scp "root@<板端IP>:/tmp/id5-range-20261014.txt" artifacts/reports/id5-range-20261014.txt` 覆盖本文件。
+- **未完成项**：`sudo rtcs-pl-g1 --uio /dev/uio0 probe` 因三次密码错误未取得输出，本文件不含 G1 probe 记录。
+- **未做**：拒绝侧测试（900 / 3100 未试）。
+
+---
+
+## 1. 只读基线（发运动帧前）
+
+```
+RTCS_PL_G2_SIX abi=0x5254000e physical_tx=ENABLED calibrated_mask=0x3f
+limit id=1 min=1000 max=3000 reference_count=2000 speed_raw_max=1500
+limit id=2 min=861 max=1500 reference_count=861 speed_raw_max=1500
+limit id=3 min=2000 max=3117 reference_count=3117 speed_raw_max=1500
+limit id=4 min=2000 max=2861 reference_count=2861 speed_raw_max=1500
+limit id=5 min=0 max=4000 reference_count=2000 speed_raw_max=1500
+limit id=6 min=2050 max=3000 reference_count=2092 speed_raw_max=1500
+RTCS_PL_G2_SIX_LIMITS_OK calibrated_mask=0x3f
+```
+
+```
+RTCS_PL_G2_SIX abi=0x5254000e physical_tx=ENABLED calibrated_mask=0x3f
+diagnose id=1 position_raw=1964 servo_error=0x00 read_fault=0 status=OK servo_error_bits=none position_valid=1 epoch_ms=1520599464241
+diagnose id=2 position_raw=886 servo_error=0x00 read_fault=0 status=OK servo_error_bits=none position_valid=1 epoch_ms=1520599464242
+diagnose id=3 position_raw=2855 servo_error=0x00 read_fault=0 status=OK servo_error_bits=none position_valid=1 epoch_ms=1520599464243
+diagnose id=4 position_raw=2939 servo_error=0x00 read_fault=0 status=OK servo_error_bits=none position_valid=1 epoch_ms=1520599464244
+diagnose id=5 position_raw=2001 servo_error=0x00 read_fault=0 status=OK servo_error_bits=none position_valid=1 epoch_ms=1520599464245
+diagnose id=6 position_raw=2047 servo_error=0x00 read_fault=0 status=OK servo_error_bits=none position_valid=1 epoch_ms=1520599464246
+RTCS_PL_G2_SIX_DIAG OK issues=0 read_only=1 write_sent=0
+```
+
+```
+RTCS_PL_G2_SIX_TORQUE id=5 register=0x28 value=0
+```
+
+**判读**：`calibrated_mask=0x3f`、六轴 `servo_error=0x00`、`issues=0 read_only=1 write_sent=0` —— 只读全绿。
+ID 6 读回 `2050..3000`，与仓库 2026-10-13 新镜像一致，此前"板端仍是旧范围 1585..2500"的待核对项关闭。
+
+---
+
+## 2. 单轴 move 实测（speed_raw=500 / time_raw=100，tolerance=30，observe_ms=5000）
+
+### 2.1 target=1800
+
+```
+commit id=5 target=1800 speed_raw=500 time_raw=100 tolerance=30 observe_ms=5000 torque_toggle=0x28:1 command_deadline_ticks=59544306403
+result id=5 start=UNAVAILABLE target=1800 last=1811 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE target_error=11 in_band=1 write_sent=1 unicast_ack=1 fault=0 fault_id=5
+diagnostic phase=post_write_feedback engine_fault=0 servo_error_raw=UNAVAILABLE servo_error_bits=UNAVAILABLE incident_position=UNAVAILABLE incident_position_valid=0 start_valid=0 last_valid=1 write_started=1 unicast_ack_valid=1 elapsed_ms=605 epoch_ms=1520599479678 engine_class=n/a engine_reason=none fault_axis=5 diag_latched=1
+RTCS_PL_G2_OK id=5 target=1800 position_raw=1811 final_error=11 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE samples=12 elapsed_ms=605 timing=WITHIN_2S
+```
+
+### 2.2 target=1500
+
+```
+commit id=5 target=1500 speed_raw=500 time_raw=100 tolerance=30 observe_ms=5000 torque_toggle=0x28:1 command_deadline_ticks=59621271011
+result id=5 start=UNAVAILABLE target=1500 last=1510 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE target_error=10 in_band=1 write_sent=1 unicast_ack=1 fault=0 fault_id=5
+diagnostic phase=post_write_feedback engine_fault=0 servo_error_raw=UNAVAILABLE servo_error_bits=UNAVAILABLE incident_position=UNAVAILABLE incident_position_valid=0 start_valid=0 last_valid=1 write_started=1 unicast_ack_valid=1 elapsed_ms=757 epoch_ms=1520599480600 engine_class=n/a engine_reason=none fault_axis=5 diag_latched=1
+RTCS_PL_G2_OK id=5 target=1500 position_raw=1510 final_error=10 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE samples=15 elapsed_ms=757 timing=WITHIN_2S
+```
+
+### 2.3 target=1200
+
+```
+commit id=5 target=1200 speed_raw=500 time_raw=100 tolerance=30 observe_ms=5000 torque_toggle=0x28:1 command_deadline_ticks=59713272702
+result id=5 start=UNAVAILABLE target=1200 last=1211 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE target_error=11 in_band=1 write_sent=1 unicast_ack=1 fault=0 fault_id=5
+diagnostic phase=post_write_feedback engine_fault=0 servo_error_raw=UNAVAILABLE servo_error_bits=UNAVAILABLE incident_position=UNAVAILABLE incident_position_valid=0 start_valid=0 last_valid=1 write_started=1 unicast_ack_valid=1 elapsed_ms=757 epoch_ms=1520599481520 engine_class=n/a engine_reason=none fault_axis=5 diag_latched=1
+RTCS_PL_G2_OK id=5 target=1200 position_raw=1211 final_error=11 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE samples=15 elapsed_ms=757 timing=WITHIN_2S
+```
+
+### 2.4 target=2200
+
+```
+commit id=5 target=2200 speed_raw=500 time_raw=100 tolerance=30 observe_ms=5000 torque_toggle=0x28:1 command_deadline_ticks=59806267411
+result id=5 start=UNAVAILABLE target=2200 last=2182 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE target_error=18 in_band=1 write_sent=1 unicast_ack=1 fault=0 fault_id=5
+diagnostic phase=post_write_feedback engine_fault=0 servo_error_raw=UNAVAILABLE servo_error_bits=UNAVAILABLE incident_position=UNAVAILABLE incident_position_valid=0 start_valid=0 last_valid=1 write_started=1 unicast_ack_valid=1 elapsed_ms=2161 epoch_ms=1520599483853 engine_class=n/a engine_reason=none fault_axis=5 diag_latched=1
+RTCS_PL_G2_OK id=5 target=2200 position_raw=2182 final_error=18 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE samples=43 elapsed_ms=2161 timing=AFTER_2S
+```
+
+### 2.5 target=2500
+
+```
+commit id=5 target=2500 speed_raw=500 time_raw=100 tolerance=30 observe_ms=5000 torque_toggle=0x28:1 command_deadline_ticks=60039280105
+result id=5 start=UNAVAILABLE target=2500 last=2490 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE target_error=10 in_band=1 write_sent=1 unicast_ack=1 fault=0 fault_id=5
+diagnostic phase=post_write_feedback engine_fault=0 servo_error_raw=UNAVAILABLE servo_error_bits=UNAVAILABLE incident_position=UNAVAILABLE incident_position_valid=0 start_valid=0 last_valid=1 write_started=1 unicast_ack_valid=1 elapsed_ms=757 epoch_ms=1520599484780 engine_class=n/a engine_reason=none fault_axis=5 diag_latched=1
+RTCS_PL_G2_OK id=5 target=2500 position_raw=2490 final_error=10 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE samples=15 elapsed_ms=757 timing=WITHIN_2S
+```
+
+### 2.6 target=2800
+
+```
+commit id=5 target=2800 speed_raw=500 time_raw=100 tolerance=30 observe_ms=5000 torque_toggle=0x28:1 command_deadline_ticks=60330285040
+result id=5 start=UNAVAILABLE target=2800 last=2789 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE target_error=11 in_band=1 write_sent=1 unicast_ack=1 fault=0 fault_id=5
+diagnostic phase=post_write_feedback engine_fault=0 servo_error_raw=UNAVAILABLE servo_error_bits=UNAVAILABLE incident_position=UNAVAILABLE incident_position_valid=0 start_valid=0 last_valid=1 write_started=1 unicast_ack_valid=1 elapsed_ms=757 epoch_ms=1520599487690 engine_class=n/a engine_reason=none fault_axis=5 diag_latched=1
+RTCS_PL_G2_OK id=5 target=2800 position_raw=2789 final_error=11 actual_delta=UNAVAILABLE position_change_observed=UNAVAILABLE samples=15 elapsed_ms=757 timing=WITHIN_2S
+```
+
+---
+
+## 3. 结论
+
+| 目标 | last | target_error | fault | servo_error_raw | samples | elapsed_ms | timing |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1800 | 1811 | 11 | 0 | 0x00 | 12 | 605 | WITHIN_2S |
+| 1500 | 1510 | 10 | 0 | 0x00 | 15 | 757 | WITHIN_2S |
+| 1200 | 1211 | 11 | 0 | 0x00 | 15 | 757 | WITHIN_2S |
+| 2200 | 2182 | 18 | 0 | 0x00 | 43 | 2161 | **AFTER_2S** |
+| 2500 | 2490 | 10 | 0 | 0x00 | 15 | 757 | WITHIN_2S |
+| 2800 | 2789 | 11 | 0 | 0x00 | 15 | 757 | WITHIN_2S |
+
+1. **两端可达**：1200 与 2800 均 `fault=0 in_band=1 unicast_ack=1`。真实边界比 `[1200, 2800]` 更宽，
+   `config/g2_measured_limits.toml` 的 `safe_min/safe_max` 因此**保持 0/4000 不变**。
+2. **未做拒绝侧测试**（900 / 3100），上下界仍是"待定区间"而不是实测边界。
+3. `start=UNAVAILABLE` / `actual_delta=UNAVAILABLE` 是 ABI 0E 的既有语义，不是本次异常。
+4. `target=2200` 的 `timing=AFTER_2S`（2161 ms）是**单次节拍数据**，不是故障：
+   该次从 1206 走到 2182（约 976 count）。结合其他条目，本舵机在 speed_raw=500 下约
+   **0.31–0.45 count/ms**，即 1000 count 约需 2.2 s。这是 G5"预测拦截而非实时跟随"的直接依据。
+5. 每次移动后的最终误差 10–18 count，与各轴默认容差 ±30 count 同量级；**"位置到位"不等于
+   "实物抓取成功"**，G3 的实物结果仍需单独记录。

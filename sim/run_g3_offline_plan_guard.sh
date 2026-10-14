@@ -50,7 +50,7 @@ def step(name, id5_target):
         "workspace_id": "bench-a",
         "path_clear_confirmed": True,
         "measured_at": "2026-10-10T00:00",
-        "target_count": [2000, 1000, 2500, 2400, id5_target, 2000],
+        "target_count": [2000, 1000, 2500, 2400, id5_target, 2500],
         "speed_raw": [500, 500, 500, 500, 500, 500],
         "time_raw": [10, 10, 10, 10, 10, 10],
     }

@@ -1,0 +1,43 @@
+# Workspace plane mapping 配置模板 —— 模板本身不可用于生产。
+#
+# 真实文件 config/workspace_plane.yaml 由求解命令生成，不要手工填写数值：
+#   python -m src.vision.plane_mapping calibrate \
+#     --points <points.csv> --output config/workspace_plane.yaml \
+#     --method homography --max-error-mm 2.0 --margin-px 4 \
+#     --workspace-id <名字> --resolution 640x480 --background yellow_desk
+#
+# 结构说明与现场步骤见 docs/vision/平面映射标定操作指南.md。
+# 下方所有数值都是占位；calibration_points 为空表示尚未标定。
+
+schema: 1
+method: homography          # homography（全局单应）或 poly2（二次多项式，吸畸变更强）
+image_normalization:
+  cu: 0.0                   # 求解时自动写入，勿手改
+  cv: 0.0
+  scale: 1.0
+
+# method=homography 时存在；3x3，使 [x, y, 1] ~ matrix @ [u, v, 1]
+matrix:
+  - [0.0, 0.0, 0.0]
+  - [0.0, 0.0, 0.0]
+  - [0.0, 0.0, 0.0]
+
+# method=poly2 时存在；基为 [1, un, vn, un^2, un*vn, vn^2]
+# x_coefficients: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+# y_coefficients: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+valid_region:
+  hull_uv: []               # 已验证点的凸包（逆时针）；空 = 未标定，拒绝一切转换
+  margin_px: 0.0            # 边界余量：离凸包边不足该像素的目标一律拒绝
+
+calibration_points: []      # [{name, u, v, x_mm, y_mm, split}]；split = calibrate / validate
+
+validation: null            # {n_calibrate, n_validate, *_mm, points: [...]}
+
+metadata:
+  workspace_id: ""
+  resolution: ""
+  background: ""            # yellow_desk 或 green_belt
+  camera_index: null
+  note: ""
+  created_utc: ""

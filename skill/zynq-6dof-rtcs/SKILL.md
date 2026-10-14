@@ -27,7 +27,7 @@ Whenever naming a repository file in an answer, report, explanation, plan, or co
 ## 修改 workflow
 
 1. Restate the requested outcome and inspect the smallest relevant set of source, configuration, simulation, build, and documentation files. Check the working tree first; preserve unrelated existing edits.
-2. Follow the architectural partition and register contract. Keep physical outputs disabled unless the user explicitly requests an authorized safety-gate change backed by the required evidence. Never invent mechanical calibration, pin, voltage, servo-ID, timing, or safety-limit values.
+2. Follow the architectural partition and register contract. Never invent mechanical calibration, pin, voltage, servo-ID, timing, or limit values. Keep checks tied to the current command and actual hardware preconditions; do not add a pre-read, prior-error lockout, or evidence approval before an explicit absolute motion command.
 3. Make only changes necessary for the request. When a change crosses PS/PL boundaries, update every affected contract endpoint together (register documentation, RTL, PS header/application, and verification material as applicable).
 4. Run the narrowest safe verification available and report what was run, what could not be run, and why. Do not represent unrun board, timing, or servo tests as passed.
 5. Finish with: (a) files modified, grouped by their repository paths and rendered according to **File-path rendering**; (b) a concise modification summary; (c) verification evidence and remaining risks; and (d) a `未来展望` section with the next technically justified steps.
@@ -48,7 +48,7 @@ This is strictly read-only: do not edit source, configuration, build files, docu
 - PS owns vision, calibration, FK/IK, task policy, deadlines, and logs. PL owns timing-critical trajectory/bus/protocol parsing, watchdogs, limits, E-stop, and deterministic scheduling.
 - AXI4-Lite is the current command/status interface. Do not add DMA, HLS, ROS, or a new hardware protocol merely because a reference project uses it; require measured need and user scope.
 - Do not add `Material_Library/` to build scripts, source lists, include paths, or deliverables. It is read-only reference material, and copied code requires a separate provenance/license review.
-- Any request that would enable `servo_tx_en` must stop at the applicable red-line gate unless the user supplies the required measured evidence and expressly authorizes that gate change. The stage set is G0–G6 (see `docs/0.1hardware_bringup.md` to `docs/6.G6-final-delivery.md`).
+- For changes to `servo_tx_en`, preserve the physical inhibit, electrical limits, and independent stop path. Do not use unrelated history or documentation tasks as a transmit permission check. The stage set is G0–G6 (see `docs/0.1hardware_bringup.md` to `docs/6.G6-final-delivery.md`).
 
 ## 双轨制（Dual-track gates）— 最高优先级流程约定
 
@@ -61,7 +61,9 @@ This repository runs **two tracks**, defined in `docs/0.1hardware_bringup.md`. A
 
 **Process gates（archival track only）**: per-step `operator_confirmed` and evidence references in `config/g3_station_plan.template.json` validated by `scripts/g3_offline_plan.py`; full raw-output archiving per command; the "position feedback alone cannot prove a grasp" judgement chain; 100-cycle full logging; P99 statistics; long-run statistics.
 
-**Rule**: **任何流程性门禁不得阻塞竞赛轨的运动路径** — no process gate may block the fast track's motion path. If a check produces only an evidence requirement and does not prevent an irreversible action, it must not be a precondition for motion on the fast track. Conversely, **red-line gates are never relaxed to make a deadline**; relieve schedule pressure by cutting feature scope, never by removing independent power, the inhibit strap, or the E-stop.
+**Rule**: **任何安全措施不得损害项目推进速度。** Keep only controls that directly prevent a hazardous physical command; implement them at the narrowest point. No process gate may block the fast track's motion path. A previous command's servo `ERROR`, failed read, or missed target is evidence for that command, **never a persistent lockout on the next explicit command**. Preserve its raw error and nonzero result; do not relabel it `OK` or automatically resend it. Independent power, physical inhibit, measured PL command limits, and the physical E-stop remain available for actual hardware control.
+
+For ID 6, a fixed no-overload closing count is not a universal workpoint: contact count varies with object size. Record requested count, last valid count, servo error, and observed object grasp separately. A grasp observed near 2373 despite a 2100 command and `0x20` overload is a physical observation plus a command fault, not a G2 motion success; neither fact alone creates a ban on later explicit commands. Future G3 task policy may decide how to proceed from contact evidence without changing the G2 diagnostic truth. Do not introduce a "must find a fault-free count for every object" prerequisite to continue development.
 
 **Current stage entry conditions** (measured, 2026-10-12): board ABI `0x5254000E` flashed and verified; ID 1–5 are joints and **ID 6 is the gripper**; ID 5's narrow internal angle window is resolved. Use `docs/7.sprint-plan-daily-tasks.md` for the day-by-day plan.
 

@@ -1,10 +1,11 @@
-# 2026-10-08，用户在安装状态下逐轴实测；安全范围两端均包含。
-# 原始 count 只用于 G2 总线命令。关节方向未给出，不从范围方向推算角度符号。
+# ID 1–5 沿用 2026-10-08 安装状态标定；ID 6 于 2026-10-13 重新校准。
+# 原始 count 只用于 G2 总线命令；不从关节范围推算角度符号。
 [arm]
 axis_count = 6
 position_unit = "servo_count"
-measured_reference_pose_count = [2000, 861, 3117, 2861, 2000, 1585]
-# 这不是安全回位姿态：ID 2/6 在下限，ID 3/4 在上限。
+measured_reference_pose_count = [2000, 861, 3117, 2861, 2000, 2092]
+# ID 6 的 2092 来自 2026-10-13 静止 diagnose，只是当次参考读值。
+# 这不是安全回位姿态：ID 2 在下限，ID 3/4 在上限。
 # safe_return_pose_count 尚未实测，软件无自动回位命令。
 counts_per_90_degrees_approx = 1000
 
@@ -41,16 +42,44 @@ safe_max = 2861
 # 2026-10-12 操作者报告已用官方软件重新校准 ID 5，并认可 0..4000 作为命令范围。
 # 这不是机械全行程的实测安全区间；具体 G3 工位路径仍须逐步现场确认。
 # 旧窄窗口根因与尚缺的写后原始记录见 docs/2.G2-six-axis-calibration.md。
+#
+# 2026-10-14 实测（逐条单轴 move，speed_raw=500 / time_raw=100，ABI 0E 板端）：
+#   1800 -> last=1811 target_error=11 fault=0 samples=12 elapsed=605ms  WITHIN_2S
+#   1500 -> last=1510 target_error=10 fault=0 samples=15 elapsed=757ms  WITHIN_2S
+#   1200 -> last=1211 target_error=11 fault=0 samples=15 elapsed=757ms  WITHIN_2S
+#   2200 -> last=2182 target_error=18 fault=0 samples=43 elapsed=2161ms AFTER_2S
+#   2500 -> last=2490 target_error=10 fault=0 samples=15 elapsed=757ms  WITHIN_2S
+#   2800 -> last=2789 target_error=11 fault=0 samples=15 elapsed=757ms  WITHIN_2S
+# 六条命令 servo_error_raw 全为 0x00、write_sent=1、unicast_ack=1。
+#
+# 结论：1200 与 2800 两端均**可达**。**未做**拒绝侧测试（900 / 3100 未试），
+#   所以真实边界仍比 [1200, 2800] 更宽；safe_min/safe_max 继续保留 0/4000，
+#   不得把"已确认可达"当成"实测边界"。
+# 顺带得到的节拍数据（G5 预筛依据）：约 0.31~0.45 count/ms，移动 1000 count 需 ~2.2 s，
+#   印证"舵机节拍不足以做实时跟随，只能提前就位 + 对齐时机"。
+# 证据：artifacts/reports/id5-range-20261014.txt
+#   （操作者终端粘贴摘录；完整原始文件在板端 /tmp/id5-range-20261014.txt，待取回覆盖）
 servo_id = 5
 reference_position = 2000
 safe_min = 0
 safe_max = 4000
 
 [[axis]]
-# ID 6 = 夹爪执行器（用户 2026-10-12 确认）。下面 1585..2500 是其命令闭区间标注，
-# "开"与"合"对应的原始 count 方向与两端值须由 G3 步骤 1 实测确认后补记。
+# ID 6 = 夹爪执行器。2026-10-13 重新校准后，操作者确认 2050..3050
+# 两端可达且无机械干涉，并选择更窄的 2050..3000 作为新 PL 命令范围。
+# 下臂静止、上臂活动；count 越大，上臂张得越开。
+# 张开 2500：当次单轴 WRITE ACK 有效，发后位置 2486，fault=0。
+# 夹取请求 2100：夹住小方块时停在 2373，target_error=273，舵机
+# servo_error_raw=0x20 (overload)，G2 fault=5。这次实物夹住与 G2
+# 命令失败分别记录；接触位置随工件尺寸变化，2100 不是通用闭合 count。
+# 下方范围已编入仓库 2026-10-13 新镜像；2026-10-14 板端 limits 实测读回 2050..3000，
+# 与仓库镜像一致，此前"板端仍是旧范围 1585..2500"的待核对项已关闭。
 # 夹爪与 ID 1–5 共用同一条六轴广播命令，不为它另建旁路。
 servo_id = 6
-reference_position = 1585
-safe_min = 1585
-safe_max = 2500
+reference_position = 2092
+safe_min = 2050
+safe_max = 3000
+gripper_open_target = 2500
+gripper_black_cube_close_command = 2100
+gripper_black_cube_contact_observed = 2373
+gripper_black_cube_servo_error_raw = 0x20

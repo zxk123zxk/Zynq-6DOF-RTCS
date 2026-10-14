@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "D:/3.Electronic_Information/2026.9-ES_Competition-FPGA-AMD/Zynq-6DOF-RTCS/src/ps/linux"
+    "cmake.sourceDirectory": "D:/3.Electronic_Information/2026.9-ES_Competition-FPGA-AMD/Zynq-6DOF-RTCS/src/ps/linux",
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

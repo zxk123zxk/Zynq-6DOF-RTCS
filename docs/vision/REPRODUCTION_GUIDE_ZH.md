@@ -4,7 +4,9 @@
 
 本模块在 PC 上使用 YOLO A 检测真实三维 `cube` 和 `cylinder`，支持同一帧多个目标，输出类别、置信度、原图检测框和像素中心。
 
-当前尚未完成真实相机标定，不输出 Workspace 毫米坐标、Robot Base 坐标或 `yaw`，也没有完成机械臂抓取闭环验证。
+**只对两种固定背景负责：黄色桌面、绿色传送带**（2026-10-14 定）。其它背景的画面不作为验收对象。不使用棋盘格，也不单独求相机内参。
+
+当前尚未完成真实平面映射标定，不输出 Workspace 毫米坐标、Robot Base 坐标或 `yaw`，也没有完成机械臂抓取闭环验证。
 
 ## 2. 环境准备
 
@@ -14,7 +16,7 @@
 python -m pip install -r requirements-vision.txt
 ```
 
-已验证依赖为 NumPy 1.26.4、OpenCV 4.10.0.84、Ultralytics 8.4.43。安装或升级依赖前应遵守团队环境管理流程。
+已验证依赖为 NumPy 1.26.4、OpenCV 4.10.0.84、Ultralytics 8.4.43。本模块只用 YOLO 检测与 OpenCV 坐标变换，**不需要棋盘格标定板**。
 
 确认环境：
 
@@ -99,13 +101,29 @@ python -m src.vision.cube_cylinder_live_test `
 
 图片目录使用 `--source images` 并让 `--input` 指向目录。
 
+## 7.1 固定背景检出点检
+
+一次运行只拍一种背景（黄色桌面或绿色传送带）。录完后用现场已知放置数量做逐帧一致性点检：
+
+```powershell
+python -m src.vision.detection_audit vision_runs\green_belt_001 `
+  --expect 3 `
+  --frames-from vision_runs\green_belt_001\annotated.mp4 `
+  --output audit_runs\green_belt_001
+```
+
+它会输出 `audit.json` / `audit.txt` 与可疑帧 PNG。`--expect` 必须是**现场实际放置数量**；
+工具**不输出 recall/precision**，漏检与误检由人工在导出的帧上裁定。详见
+[视觉模块 README](README.md) 与[当日验收细则](验收细则-20261014.md)。
+
 ## 8. 自动测试
 
 ```powershell
 python -m unittest discover -s tests\vision -p "test_*.py" -v
 ```
 
-预期为 16 项测试。它们验证接口、空检测、ROI 坐标恢复和合成几何逻辑，不代表最终传送带识别性能。
+预期为 90 项测试。它们验证接口、空检测、ROI 坐标恢复、合成几何逻辑、点检工具的
+逐帧数量判定与抽帧行为，以及平面映射求解与相机控制判定，不代表最终传送带识别性能。
 
 ## 9. 常见问题
 
@@ -115,7 +133,7 @@ python -m unittest discover -s tests\vision -p "test_*.py" -v
 - 找不到权重：确认模型位于 `models/vision/`，或用 `--weights` 显式指定。
 - 输出目录已存在：换一个新目录，不要删除或覆盖旧证据。
 - 有框但类别错误：保留原视频、JSONL、Camera 参数和现场条件；当前模型已知存在跨场景误检与漏检。
-- 广角边缘位置偏差：尚未完成真实内参和畸变标定，不要用像素坐标推算毫米坐标。
+- 广角边缘位置偏差：不做独立内参/畸变标定；像素→毫米只在**工作平面上实测点对求得的映射的有效边界内**成立，越界必须拒绝，不要外推。
 
 ## 10. 许可证
 
