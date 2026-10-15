@@ -120,6 +120,10 @@ def build_parser():
     p.add_argument("--camera-index",type=int,default=0); p.add_argument("--mode",choices=("yolo","opencv","compare"),default="compare")
     p.add_argument("--weights",type=Path,default=YOLO_A); p.add_argument("--background",type=Path)
     p.add_argument("--roi",type=parse_roi); p.add_argument("--conf",type=float,default=.25); p.add_argument("--imgsz",type=int,default=640); p.add_argument("--device",default="0")
+    p.add_argument("--auto-exposure",type=float,default=None,help="仅camera模式：CAP_PROP_AUTO_EXPOSURE 手动/自动开关（Windows MSMF 0.75=手动；V4L2 1=手动 3=自动）；不设则保持相机默认")
+    p.add_argument("--exposure",type=float,default=None,help="仅camera模式：CAP_PROP_EXPOSURE 手动曝光（Windows 常为 log2 秒，越小越暗）；需与 --auto-exposure 手动档同用")
+    p.add_argument("--gain",type=float,default=None,help="仅camera模式：CAP_PROP_GAIN 增益")
+    p.add_argument("--backend",choices=("any","msmf","dshow","v4l2"),default="any",help="仅camera模式：VideoCapture 后端；Windows 曝光控制建议 msmf（msmf 下相机序号可能变化，若打不开改 --camera-index 试 0/1/2）")
     p.add_argument("--background-distance",type=float,default=55.0); p.add_argument("--output-dir",type=Path,required=True); p.add_argument("--no-display",action="store_true")
     return p
 
@@ -145,8 +149,19 @@ def main(argv=None):
         if not paths: raise ValueError("图片目录中没有支持的图片")
         iterator=((i,read_image(p),None,"still_image",p.name) for i,p in enumerate(paths)); fps_source=None
     else:
-        source=args.camera_index if args.source=="camera" else str(args.input); cap=cv2.VideoCapture(source)
-        if not cap.isOpened(): raise OSError(f"无法打开{args.source}: {source}")
+        if args.source=="camera":
+            backend=getattr(cv2,f"CAP_{args.backend.upper()}",cv2.CAP_ANY)
+            cap=cv2.VideoCapture(args.camera_index,backend)
+        else:
+            cap=cv2.VideoCapture(str(args.input))
+        if not cap.isOpened(): raise OSError(f"无法打开{args.source}: {args.camera_index if args.source=='camera' else args.input} (backend={args.backend})")
+        camera_controls={}
+        if args.source=="camera":
+            # 相机控制只在打开后立即设置并回读记录；写失败时保留回读值以便诊断，不视为致命错误
+            for name,prop,value in (("auto_exposure",cv2.CAP_PROP_AUTO_EXPOSURE,args.auto_exposure),("exposure",cv2.CAP_PROP_EXPOSURE,args.exposure),("gain",cv2.CAP_PROP_GAIN,args.gain)):
+                if value is None: continue
+                cap.set(prop,value); camera_controls[name]=cap.get(prop)
+            if camera_controls: logging.info("camera_controls: "+json.dumps(camera_controls))
         fps_source=float(cap.get(cv2.CAP_PROP_FPS)) if args.source=="video" else None
         def frames():
             i=0
@@ -181,6 +196,7 @@ def main(argv=None):
         if writer is not None: writer.release()
         cv2.destroyAllWindows()
     summary={"status":"complete","source":args.source,"mode":args.mode,"frames":len(records),"output":str(args.output_dir.resolve()),"millimetre_coordinates":False}
+    if args.source=="camera" and camera_controls: summary["camera_controls"]={k:round(v,4) for k,v in camera_controls.items()}
     (args.output_dir/"summary.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8"); logging.info(json.dumps(summary,ensure_ascii=False)); print(json.dumps(summary,ensure_ascii=False,indent=2))
 
 if __name__=="__main__": main()

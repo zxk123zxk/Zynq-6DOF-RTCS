@@ -76,6 +76,24 @@ CPU：将 `--device 0` 改为 `--device cpu`。CPU 速度不能代表 Zynq PS �
 
 按 `Q` 或 `Esc` 退出，按 `S` 保存当前画面。每次使用新的 `--output-dir`，程序会拒绝覆盖历史结果。
 
+### 5.1 反光治理：手动曝光（2026-10-15 加入）
+
+光面皮带/高反光桌面在自动曝光下高光过曝，会被模型误检为目标。治理命令（Windows，MSMF 后端）：
+
+```powershell
+python -m src.vision.cube_cylinder_live_test `
+  --source camera --camera-index 0 --backend msmf `
+  --auto-exposure 0.75 --exposure -6 `
+  --mode yolo --weights models\vision\yolo_a_cube_cylinder_best.pt `
+  --conf 0.25 --imgsz 640 --device cpu `
+  --output-dir vision_runs\camera_002
+```
+
+- `--exposure` 越小越暗（约 log2 秒）；高光仍在就依次试 `-7`、`-8`。
+- 是否生效看 `summary.json` 的 `camera_controls` 回读值：`exposure` 等于设置值即生效；否则换 `--backend dshow`。
+- `--backend msmf` 下相机序号可能变化，打不开就换 `--camera-index 0/1/2` 试。
+- 采集训练数据**必须在治理后的工况下拍摄**，否则模型学到的是"高光=目标"。
+
 ## 6. 输出解释
 
 - `class_id=0`：cube；`class_id=1`：cylinder。
@@ -114,7 +132,7 @@ python -m src.vision.detection_audit vision_runs\green_belt_001 `
 
 它会输出 `audit.json` / `audit.txt` 与可疑帧 PNG。`--expect` 必须是**现场实际放置数量**；
 工具**不输出 recall/precision**，漏检与误检由人工在导出的帧上裁定。详见
-[视觉模块 README](README.md) 与[当日验收细则](验收细则-20261014.md)。
+[视觉模块 README](README.md)。
 
 ## 8. 自动测试
 

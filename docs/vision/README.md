@@ -57,15 +57,15 @@ python -m src.vision.cube_cylinder_live_test `
 
 - **`src/vision/camera_locking.py`**：枚举相机、尝试锁定曝光/白平衡/增益（**如实打印读回值**——
   写成功不等于锁住）、拍摄纯背景/含工件实拍图、把新画面与基线比对。
-  用法见[命令执行清单 §3](命令执行清单-20261014.md)。
+  用法见 `python -m src.vision.camera_locking --help`。
 - **`src/vision/plane_mapping.py`**：`collect`（实拍图跑现有 YOLO 出点对）→ `calibrate`
   （独立验证点报误差，凸包外拒绝）→ `map`（运行时像素→毫米）。写法与现场步骤见
-  [平面映射标定操作指南](平面映射标定操作指南.md)。
+  `python -m src.vision.plane_mapping --help` 与 [G4 方案](../4.G4-static-vision-grasp.md) 步骤 3。
 
 两个工具都**不产生未经标定的毫米坐标**，也不驱动机械臂。
 
 **待决策中的设备/方案问题**（白方块、ROI 是否引入脆弱性、要不要换相机、要不要改用 opencv 模式）
-统一记在[相机与场景选型决策](相机与场景选型决策-20261014.md)，避免反复推翻。
+统一记在[反光诊断与自训决策](10.15-白方块反光诊断与自训决策.md)与[方案对比](方案对比-平面映射vs模仿学习-20261015.md)，避免反复推翻。
 
 ## 本地视频或图片目录
 
