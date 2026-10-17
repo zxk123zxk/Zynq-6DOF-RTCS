@@ -29,6 +29,7 @@ bash sim/run_regression_wsl.sh
 | `bash sim/run_g2_one_servo.sh` | 连接态单轴 G2 路径（WSL Verilator） |
 | `bash sim/run_buslinker_g1_dump_guard.sh` | BusLinker `dump`/`sweep` 严格只读：逐帧断言只发 READ |
 | `bash sim/run_g3_offline_plan_guard.sh` | G3 离线任务表门禁（**归档轨**，见下） |
+| `bash sim/run_g3_station_runner_guard.sh` | G3 状态机编排层：六步顺序、故障留痕不锁死、越界拒绝、抓取点覆盖（mock move-six，不碰 UIO） |
 
 ## 当前覆盖范围
 

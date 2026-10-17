@@ -24,7 +24,8 @@ safe_max = 3000
 servo_id = 2
 reference_position = 861
 safe_min = 861
-safe_max = 1500
+safe_max = 2500
+# 2026-10-17 六工位示教实测：grasp 位 2130、place 位 2433 均可达且 servo_error=0，据此放宽 1500→2500。
 
 [[axis]]
 servo_id = 3
@@ -36,7 +37,8 @@ safe_max = 3117
 servo_id = 4
 reference_position = 2861
 safe_min = 2000
-safe_max = 2861
+safe_max = 3100
+# 2026-10-17 六工位示教实测：grasp 位 3009 可达且 servo_error=0，据此放宽 2861→3100。
 
 [[axis]]
 # 2026-10-12 操作者报告已用官方软件重新校准 ID 5，并认可 0..4000 作为命令范围。

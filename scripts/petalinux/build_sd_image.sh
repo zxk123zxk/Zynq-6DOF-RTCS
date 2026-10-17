@@ -81,6 +81,10 @@ for cli in rtcs-pl-g1 rtcs-pl-g2 rtcs-pl-g2-six; do
     exit 65
   fi
 done
+if ! grep -qx 'usr/bin/python3' <<< "$rootfs_listing"; then
+  echo 'python3 missing from rootfs (G3 orchestration scripts need it); refusing to package' >&2
+  exit 65
+fi
 if ! cmp -s "$project_dir/images/linux/system.bit" "$repo_root/artifacts/hw/rtcs_system.bit"; then
   echo 'PetaLinux system.bit differs from artifacts/hw/rtcs_system.bit; refusing to package a stale bitstream' >&2
   exit 65

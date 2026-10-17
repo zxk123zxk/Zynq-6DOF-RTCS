@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "abi": "0x5254000E",
+  "station": {
+    "workspace_id": "bench-a",
+    "measured_boundary": "TODO: 工作区边界实测描述（抓取区 + 放置区范围，需现场补）",
+    "preflight": {
+      "probe_log": "evidence/probe.log",
+      "limits_log": "evidence/limits.log",
+      "diagnose_log": "evidence/diagnose.log",
+      "torque_status_id5_log": "evidence/torque_id5.log",
+      "joint_directions_log": "evidence/joint_directions.md",
+      "payload_obstacles_log": "evidence/payload_obstacles.md",
+      "software_stop_latency_log": "evidence/software_stop.md",
+      "independent_power_cut_estop_log": "evidence/independent_estop.md",
+      "operator_confirmed": true
+    },
+    "gripper_servo_id": 6,
+    "gripper_actuator_id": "6",
+    "gripper_mapping_confirmed": true,
+    "gripper_manual_procedure": "TODO: 夹爪开合人工验证流程描述",
+    "id5_fault_cleared_by_operator": true,
+    "id5_clearance_evidence": "TODO: ID5 放行证据文件名",
+    "operator_confirmed": true,
+    "evidence": "TODO: 工位整体证据文件名"
+  },
+  "steps": [
+    {"name": "standby", "workspace_id": "bench-a", "target_count": [2043, 889, 2994, 2855, 2010, 2066], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "2026-10-17T19:30", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "TODO: 复位位证据"},
+    {"name": "approach", "workspace_id": "bench-a", "target_count": [2043, 889, 2994, 2855, 2010, 2066], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "TODO: 占位，待示教", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "占位=复位值，禁止真跑，需示教"},
+    {"name": "grasp", "workspace_id": "bench-a", "target_count": [2061, 2130, 2073, 3009, 2006, 2200], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "2026-10-17T19:30", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "TODO: 抓取位证据"},
+    {"name": "lift", "workspace_id": "bench-a", "target_count": [2043, 889, 2994, 2855, 2010, 2066], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "TODO: 占位，待示教", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "占位=复位值，禁止真跑，需示教"},
+    {"name": "place", "workspace_id": "bench-a", "target_count": [1164, 2433, 2030, 2723, 2013, 2500], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "2026-10-17T19:30", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "TODO: 放置位证据"},
+    {"name": "exit", "workspace_id": "bench-a", "target_count": [2043, 889, 2994, 2855, 2010, 2066], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "2026-10-17T19:30", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "TODO: 退出位证据"}
+  ]
+}

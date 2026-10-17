@@ -58,6 +58,8 @@ install -D -m 0644 "$repo_root/src/ps/linux/apps/rtcs_pl_g2_six.c" \
   "$project_dir/project-spec/meta-user/recipes-apps/rtcs-pl-g2/files/rtcs_pl_g2_six.c"
 install -D -m 0644 "$repo_root/src/ps/linux/apps/rtcs_servo_diag.h" \
   "$project_dir/project-spec/meta-user/recipes-apps/rtcs-pl-g2/files/rtcs_servo_diag.h"
+install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-core/images/petalinux-image-minimal.bbappend" \
+  "$project_dir/project-spec/meta-user/recipes-core/images/petalinux-image-minimal.bbappend"
 install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-bsp/device-tree/files/system-user.dtsi" \
   "$project_dir/project-spec/meta-user/recipes-bsp/device-tree/files/system-user.dtsi"
 install -D -m 0644 "$repo_root/src/ps/petalinux/meta-user/recipes-kernel/linux/linux-xlnx/usbserial.cfg" \

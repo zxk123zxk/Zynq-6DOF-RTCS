@@ -26,6 +26,7 @@ done
 bash sim/run_g2_one_servo.sh
 bash sim/run_buslinker_g1_dump_guard.sh
 bash sim/run_g3_offline_plan_guard.sh
+bash sim/run_g3_station_runner_guard.sh
 bash sim/run_pl_g1_cli_abi.sh
 bash sim/run_pl_g2_cli_guard.sh
 bash sim/run_pl_g2_six_cli_guard.sh
