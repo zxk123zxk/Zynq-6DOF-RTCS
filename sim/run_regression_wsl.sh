@@ -11,6 +11,8 @@ common=(
   src/pl/rtl/rtcs_top.sv src/pl/rtl/rtcs_axi_wrapper_bd.v
   src/pl/rtl/rtcs_axi_wrapper_ttl_bd.v
 )
+# 限位表与 PL 综合常量必须同源；不同步就在这一步失败，而不是等到板端 fault=12。
+python3 scripts/check_limit_sync.py
 for top in tb_axi_lite_regs tb_hx30hm_protocol tb_hx30hm_g1_engine \
            tb_rtcs_g1_safe_top tb_rtcs_g1_ttl_top tb_g2_descriptor_guard \
            tb_g2_six_axis_controller tb_g2_cal_log_overflow \

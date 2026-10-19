@@ -16,11 +16,16 @@ module rtcs_axi_wrapper_ttl_bd (
   wire tx_data;
   wire tx_enable;
 
+  // 限位在这里是字面量而不是 g2_board_limits_pkg::SAFE_MAX：BD 的 module reference
+  // 顶必须是 Verilog(.v)，Verilog 不能引用 SystemVerilog 包常量，所以只能复制一份。
+  // 代价是两处必须同步——scripts/check_limit_sync.py 会同时校验 pkg 与本文件，
+  // 不同步就在回归第一步失败，不会等到板端 move-six 才报 fault=12。
+  // 当前值对应 config/g2_measured_limits.toml（2026-10-17 六工位示教实测）。
   rtcs_top #(
     .G1_TTL_PORTS(1'b1),
     .G2_CALIBRATED_MASK(6'h3f),
     .G2_SAFE_MIN({32'd2050,32'd0,32'd2000,32'd2000,32'd861,32'd1000}),
-    .G2_SAFE_MAX({32'd3000,32'd4000,32'd2861,32'd3117,32'd1500,32'd3000}),
+    .G2_SAFE_MAX({32'd3000,32'd4000,32'd3100,32'd3117,32'd2500,32'd3000}),
     .G2_REFERENCE({32'd2092,32'd2000,32'd2861,32'd3117,32'd861,32'd2000}),
     .G2_SPEED_MAX_RAW(16'd1500)
   ) u_rtcs_top (

@@ -7,7 +7,7 @@
 <Project Product="Vivado" Version="7" Minor="65" Path="D:/3.Electronic_Information/2026.9-ES_Competition-FPGA-AMD/Zynq-6DOF-RTCS/artifacts/vivado/zynq_rtcs/zynq_rtcs.xpr">
   <DefaultLaunch Dir="$PRUNDIR"/>
   <Configuration>
-    <Option Name="Id" Val="a11137da1bce47c0ab39b18e4dd495d2"/>
+    <Option Name="Id" Val="41bb0641014f4c8f86312b9ad009d072"/>
     <Option Name="Part" Val="xc7z020clg400-2"/>
     <Option Name="CompiledLibDir" Val="$PCACHEDIR/compile_simlib"/>
     <Option Name="CompiledLibDirXSim" Val=""/>
@@ -268,6 +268,12 @@
         <Option Name="TopAutoSet" Val="TRUE"/>
       </Config>
     </FileSet>
+    <FileSet Name="rtcs_system_auto_pc_0" Type="BlockSrcs" RelSrcDir="$PSRCDIR/rtcs_system_auto_pc_0" RelGenDir="$PGENDIR/rtcs_system_auto_pc_0">
+      <Config>
+        <Option Name="TopModule" Val="rtcs_system_auto_pc_0"/>
+        <Option Name="UseBlackboxStub" Val="1"/>
+      </Config>
+    </FileSet>
     <FileSet Name="rtcs_system_rtcs_axi_wrapper_0_0" Type="BlockSrcs" RelSrcDir="$PSRCDIR/rtcs_system_rtcs_axi_wrapper_0_0" RelGenDir="$PGENDIR/rtcs_system_rtcs_axi_wrapper_0_0">
       <Config>
         <Option Name="TopModule" Val="rtcs_system_rtcs_axi_wrapper_0_0"/>
@@ -277,12 +283,6 @@
     <FileSet Name="rtcs_system_processing_system7_0_0" Type="BlockSrcs" RelSrcDir="$PSRCDIR/rtcs_system_processing_system7_0_0" RelGenDir="$PGENDIR/rtcs_system_processing_system7_0_0">
       <Config>
         <Option Name="TopModule" Val="rtcs_system_processing_system7_0_0"/>
-        <Option Name="UseBlackboxStub" Val="1"/>
-      </Config>
-    </FileSet>
-    <FileSet Name="rtcs_system_auto_pc_0" Type="BlockSrcs" RelSrcDir="$PSRCDIR/rtcs_system_auto_pc_0" RelGenDir="$PGENDIR/rtcs_system_auto_pc_0">
-      <Config>
-        <Option Name="TopModule" Val="rtcs_system_auto_pc_0"/>
         <Option Name="UseBlackboxStub" Val="1"/>
       </Config>
     </FileSet>
@@ -324,6 +324,18 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
+    <Run Id="rtcs_system_auto_pc_0_synth_1" Type="Ft3:Synth" SrcSet="rtcs_system_auto_pc_0" Part="xc7z020clg400-2" ConstrsSet="rtcs_system_auto_pc_0" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/rtcs_system_auto_pc_0_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/rtcs_system_auto_pc_0_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/rtcs_system_auto_pc_0_synth_1">
+      <Strategy Version="1" Minor="2">
+        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023">
+          <Desc>Vivado Synthesis Defaults</Desc>
+        </StratHandle>
+        <Step Id="synth_design"/>
+      </Strategy>
+      <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
+      <ReportStrategy Name="Vivado Synthesis Default Reports" Flow="Vivado Synthesis 2023"/>
+      <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
+      <RQSFiles/>
+    </Run>
     <Run Id="rtcs_system_rtcs_axi_wrapper_0_0_synth_1" Type="Ft3:Synth" SrcSet="rtcs_system_rtcs_axi_wrapper_0_0" Part="xc7z020clg400-2" ConstrsSet="rtcs_system_rtcs_axi_wrapper_0_0" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/rtcs_system_rtcs_axi_wrapper_0_0_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/rtcs_system_rtcs_axi_wrapper_0_0_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/rtcs_system_rtcs_axi_wrapper_0_0_synth_1">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023">
@@ -337,18 +349,6 @@
       <RQSFiles/>
     </Run>
     <Run Id="rtcs_system_processing_system7_0_0_synth_1" Type="Ft3:Synth" SrcSet="rtcs_system_processing_system7_0_0" Part="xc7z020clg400-2" ConstrsSet="rtcs_system_processing_system7_0_0" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/rtcs_system_processing_system7_0_0_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/rtcs_system_processing_system7_0_0_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/rtcs_system_processing_system7_0_0_synth_1">
-      <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023">
-          <Desc>Vivado Synthesis Defaults</Desc>
-        </StratHandle>
-        <Step Id="synth_design"/>
-      </Strategy>
-      <GeneratedRun Dir="$PRUNDIR" File="gen_run.xml"/>
-      <ReportStrategy Name="Vivado Synthesis Default Reports" Flow="Vivado Synthesis 2023"/>
-      <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
-      <RQSFiles/>
-    </Run>
-    <Run Id="rtcs_system_auto_pc_0_synth_1" Type="Ft3:Synth" SrcSet="rtcs_system_auto_pc_0" Part="xc7z020clg400-2" ConstrsSet="rtcs_system_auto_pc_0" Description="Vivado Synthesis Defaults" AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" Dir="$PRUNDIR/rtcs_system_auto_pc_0_synth_1" IncludeInArchive="true" IsChild="false" AutoIncrementalDir="$PSRCDIR/utils_1/imports/rtcs_system_auto_pc_0_synth_1" AutoRQSDir="$PSRCDIR/utils_1/imports/rtcs_system_auto_pc_0_synth_1">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Synthesis Defaults" Flow="Vivado Synthesis 2023">
           <Desc>Vivado Synthesis Defaults</Desc>
@@ -392,6 +392,25 @@
       <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
       <RQSFiles/>
     </Run>
+    <Run Id="rtcs_system_auto_pc_0_impl_1" Type="Ft2:EntireDesign" Part="xc7z020clg400-2" ConstrsSet="rtcs_system_auto_pc_0" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="rtcs_system_auto_pc_0_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/rtcs_system_auto_pc_0_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/rtcs_system_auto_pc_0_impl_1">
+      <Strategy Version="1" Minor="2">
+        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023">
+          <Desc>Default settings for Implementation.</Desc>
+        </StratHandle>
+        <Step Id="init_design"/>
+        <Step Id="opt_design"/>
+        <Step Id="power_opt_design"/>
+        <Step Id="place_design"/>
+        <Step Id="post_place_power_opt_design"/>
+        <Step Id="phys_opt_design"/>
+        <Step Id="route_design"/>
+        <Step Id="post_route_phys_opt_design"/>
+        <Step Id="write_bitstream"/>
+      </Strategy>
+      <ReportStrategy Name="Vivado Implementation Default Reports" Flow="Vivado Implementation 2023"/>
+      <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
+      <RQSFiles/>
+    </Run>
     <Run Id="rtcs_system_rtcs_axi_wrapper_0_0_impl_1" Type="Ft2:EntireDesign" Part="xc7z020clg400-2" ConstrsSet="rtcs_system_rtcs_axi_wrapper_0_0" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="rtcs_system_rtcs_axi_wrapper_0_0_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/rtcs_system_rtcs_axi_wrapper_0_0_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/rtcs_system_rtcs_axi_wrapper_0_0_impl_1">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023">
@@ -412,25 +431,6 @@
       <RQSFiles/>
     </Run>
     <Run Id="rtcs_system_processing_system7_0_0_impl_1" Type="Ft2:EntireDesign" Part="xc7z020clg400-2" ConstrsSet="rtcs_system_processing_system7_0_0" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="rtcs_system_processing_system7_0_0_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/rtcs_system_processing_system7_0_0_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/rtcs_system_processing_system7_0_0_impl_1">
-      <Strategy Version="1" Minor="2">
-        <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023">
-          <Desc>Default settings for Implementation.</Desc>
-        </StratHandle>
-        <Step Id="init_design"/>
-        <Step Id="opt_design"/>
-        <Step Id="power_opt_design"/>
-        <Step Id="place_design"/>
-        <Step Id="post_place_power_opt_design"/>
-        <Step Id="phys_opt_design"/>
-        <Step Id="route_design"/>
-        <Step Id="post_route_phys_opt_design"/>
-        <Step Id="write_bitstream"/>
-      </Strategy>
-      <ReportStrategy Name="Vivado Implementation Default Reports" Flow="Vivado Implementation 2023"/>
-      <Report Name="ROUTE_DESIGN.REPORT_METHODOLOGY" Enabled="1"/>
-      <RQSFiles/>
-    </Run>
-    <Run Id="rtcs_system_auto_pc_0_impl_1" Type="Ft2:EntireDesign" Part="xc7z020clg400-2" ConstrsSet="rtcs_system_auto_pc_0" Description="Default settings for Implementation." AutoIncrementalCheckpoint="false" WriteIncrSynthDcp="false" SynthRun="rtcs_system_auto_pc_0_synth_1" IncludeInArchive="false" IsChild="false" GenFullBitstream="true" AutoIncrementalDir="$PSRCDIR/utils_1/imports/rtcs_system_auto_pc_0_impl_1" AutoRQSDir="$PSRCDIR/utils_1/imports/rtcs_system_auto_pc_0_impl_1">
       <Strategy Version="1" Minor="2">
         <StratHandle Name="Vivado Implementation Defaults" Flow="Vivado Implementation 2023">
           <Desc>Default settings for Implementation.</Desc>

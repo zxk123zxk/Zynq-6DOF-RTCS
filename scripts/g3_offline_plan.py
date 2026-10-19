@@ -18,15 +18,17 @@ def fail(message):
 
 
 def _load_limits_without_tomllib(text):
-    """Read the three integer keys this program needs from [[axis]] blocks.
+    """Read the three integer keys this program needs from [[axis]] blocks,
+    plus the optional [task] operating caps.
 
-    Only used when the host has no tomllib (Python < 3.11).  It is deliberately
-    strict and fails closed: an unreadable value or a table with no [[axis]]
-    block raises instead of yielding empty limits, so a parsing problem can
-    never silently widen a workspace.
+    Only used when the host has no tomllib (Python < 3.11, i.e. the board's
+    Python 3.10).  It is deliberately strict and fails closed: an unreadable
+    value or a table with no [[axis]] block raises instead of yielding empty
+    limits, so a parsing problem can never silently widen a workspace.
     """
     axes = []
     current = None
+    task = {}
     for raw_line in text.splitlines():
         line = raw_line.split("#", 1)[0].strip()
         if not line:
@@ -36,12 +38,19 @@ def _load_limits_without_tomllib(text):
             axes.append(current)
             continue
         if line.startswith("["):
-            current = None
+            current = {"__task__": True} if line.startswith("[task]") else None
             continue
         if current is None or "=" not in line:
             continue
         key, _, value = line.partition("=")
         key = key.strip()
+        if current.get("__task__"):
+            if key == "id2_target_max":
+                try:
+                    task["id2_target_max"] = int(value.strip())
+                except ValueError:
+                    fail("measured limit table: task id2_target_max is not an integer")
+            continue
         if key not in ("servo_id", "safe_min", "safe_max"):
             continue
         try:
@@ -51,7 +60,10 @@ def _load_limits_without_tomllib(text):
     if not axes or any("servo_id" not in axis or "safe_min" not in axis or
                        "safe_max" not in axis for axis in axes):
         fail("measured limit table: incomplete [[axis]] entry")
-    return {"axis": axes}
+    result = {"axis": axes}
+    if task:
+        result["task"] = task
+    return result
 
 
 def load_limits(path):
@@ -70,11 +82,43 @@ def confirmed(record, name):
         fail(f"{name}: measured evidence reference missing")
 
 
-def validate(plan, through_step=None):
+def validate_gripper(item, name, gripper_limits):
+    """校验一步的夹爪动作（可选字段 ``gripper``）。
+
+    夹爪动作在编排层走单轴命令，因此这里只钉住"目标在实测范围内"和
+    "过载预期必须显式写明"——闭合夹物必然过载，不能靠代码猜。
+    """
+    action = item.get("gripper")
+    if action is None:
+        return
+    if not isinstance(action, dict):
+        fail(f"{name}: gripper action must be an object")
+    if action.get("command") not in ("open", "close"):
+        fail(f"{name}: gripper command must be open or close")
+    target = action.get("target_count")
+    if type(target) is not int or not gripper_limits["safe_min"] <= target <= gripper_limits["safe_max"]:
+        fail(f"{name}: gripper target outside measured ID 6 range")
+    speed = action.get("speed_raw", 500)
+    if type(speed) is not int or not 1 <= speed <= 1500:
+        fail(f"{name}: gripper invalid speed_raw")
+    time_raw = action.get("time_raw", 10)
+    if type(time_raw) is not int or not 0 <= time_raw <= 65535:
+        fail(f"{name}: gripper invalid time_raw")
+    if "expect_overload" in action and not isinstance(action["expect_overload"], bool):
+        fail(f"{name}: gripper expect_overload must be a boolean")
+    if action.get("actuator_id", 6) != 6:
+        fail(f"{name}: gripper actuator_id must be 6")
+
+
+def validate(plan, through_step=None, require_measured=False):
     limits = load_limits(ROOT / "config/g2_measured_limits.toml")
     axes = {axis["servo_id"]: axis for axis in limits["axis"]}
     if set(axes) != set(range(1, 7)):
         fail("G2 limit table must contain six unique IDs")
+    # 操作约束（非舵机物理限位）：2026-10-19 定——ID2 在展开态越过竖直点(~1990)
+    # 后带末端负载回不来，故所有运动位点的 ID2 目标一律 ≤ 2000，工件对齐靠移动传送带。
+    # 缺省 2000 是 fail-closed：即便 toml 漏带 [task] 段，门禁也照常收紧。
+    id2_target_max = limits.get("task", {}).get("id2_target_max", 2000)
     if plan.get("schema") != 1 or plan.get("abi") != "0x5254000E":
         fail("plan schema or ABI mismatch")
     station = plan.get("station")
@@ -119,6 +163,8 @@ def validate(plan, through_step=None):
             fail(f"{name}: swept path not confirmed")
         if not isinstance(item.get("measured_at"), str) or not item["measured_at"].strip():
             fail(f"{name}: measurement timestamp missing")
+        if require_measured and item["measured_at"].strip().upper().startswith("TODO"):
+            fail(f"{name}: placeholder pose; teach this station point before executing")
         goals = item.get("target_count")
         speeds = item.get("speed_raw")
         times = item.get("time_raw")
@@ -132,6 +178,12 @@ def validate(plan, through_step=None):
                 fail(f"{name}: ID {servo_id} invalid speed_raw")
             if type(times[i]) is not int or not 0 <= times[i] <= 65535:
                 fail(f"{name}: ID {servo_id} invalid time_raw")
+        if goals[1] > id2_target_max:
+            # 只告警不拦截：这是操作建议阈值（越过 ID2 竖直点可能带负载回不来），
+            # 但实测的可达性以现场为准，不拿一条启发式规则挡住整个循环。
+            print(f"G3_WARN {name}: ID 2 target {goals[1]} above operating hint "
+                  f"{id2_target_max} (may stall near the vertical point)", file=sys.stderr)
+        validate_gripper(item, name, axes[6])
     return items
 
 
@@ -165,7 +217,7 @@ def main():
     args = parser.parse_args()
     try:
         plan = json.loads(args.plan.read_text(encoding="utf-8"))
-        items = validate(plan,args.step)
+        items = validate(plan, args.step, require_measured=True)
         if args.step and args.step != "standby":
             if not args.log:
                 fail("--log required after standby")
@@ -179,7 +231,7 @@ def main():
         parts = ["sudo", "rtcs-pl-g2-six", "--uio", "/dev/uio0", "move-six"]
         for i in range(6):
             parts += ["--axis", f"{i+1}:{item['target_count'][i]}:{item['speed_raw'][i]}:{item['time_raw'][i]}"]
-        parts.append("--execute")
+        parts += ["--observe-ms", "8000", "--execute"]
         print("MANUAL_REVIEW_ONLY " + shlex.join(parts))
         print("Record current diagnose, then review the live workspace before this single step.")
     return 0

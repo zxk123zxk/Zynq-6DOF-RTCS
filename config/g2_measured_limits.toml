@@ -14,6 +14,13 @@ speed_raw_max = 1500
 speed_raw_recommended = 500
 calibrate_time_raw = 10
 
+[task]
+# 2026-10-19 机械可达性约束（非舵机物理限位）：ID2 在展开态越过竖直点(~1990)后带末端负载
+# 回不来（实测单轴 target=1950 都停在 1987/1991，无 servo_error 的静默停）。因此所有运动
+# 位点 ID2 目标一律 ≤ 2000，全程不跨点；工件/传送带位置误差由人工挪动传送带补偿。
+# 编排层门禁读这里；漏带本段时门禁按 2000 fail-closed 收紧。
+id2_target_max = 2000
+
 [[axis]]
 servo_id = 1
 reference_position = 2000
