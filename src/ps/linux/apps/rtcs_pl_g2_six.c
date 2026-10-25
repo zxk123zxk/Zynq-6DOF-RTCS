@@ -116,6 +116,7 @@ enum {
 
   TOLERANCE = 0x100,      /* 逐轴容差，1..100 */
   OBSERVE   = 0x104,      /* 观察期，单位 100 ms */
+  IGNORE    = 0x11c,      /* 只写：{到位掩码[11:6], 错误掩码[5:0]} */
   START_POSITION = 0x108, /* 各轴本次命令的起点（bit n 有效位在 RESULT 里） */
 
   RESULT = 0x10c,         /* bit0..5 起点有效、bit8..13 反馈有效、bit16..21 观察到位移、bit24..29 到位 */
@@ -461,6 +462,7 @@ static void usage(const char *name) {
     " [--tolerance 1..100] [--observe-ms 1000..10000] --execute\n"
     "       %s --uio /dev/uioN move-six --axis ID:target:speed-raw:time-raw"
     " (repeat six times) [--tolerance ID:1..100]..."
+    " [--ignore-error ID] [--ignore-arrival ID]"
     " [--observe-ms 1000..10000] --execute\n"
     "       %s --uio /dev/uioN stop --execute\n"
     "limits / diagnose / torque-status 是只读命令，不接受 --execute。\n",
@@ -474,6 +476,7 @@ int main(int argc, char **argv) {
   unsigned id = 0, seen_id = 0, seen_delta = 0, execute = 0;
   unsigned axis_mask = 0, tol_mask = 0;
   unsigned goal[6] = {0}, speed[6] = {0}, time_raw[6] = {0};
+  unsigned err_mask = 0, arr_mask = 0;   /* --ignore-error / --ignore-arrival */
   unsigned tol[6] = {30, 30, 30, 30, 30, 30}, cal_tol = 5, observe_ms = 5000;
   unsigned seen_observe = 0, seen_cal_tol = 0;
   int delta = 0, fd = -1, rc = EXIT_FAILURE, requested_stop = 0;
@@ -516,6 +519,20 @@ int main(int argc, char **argv) {
       goal[n - 1] = t;
       speed[n - 1] = s;
       time_raw[n - 1] = tm;
+    } else if (!strcmp(argv[i], "--ignore-error") && i + 1 < argc) {
+      unsigned n;
+      if (parse_u16(argv[++i], &n) || n < 1 || n > 6 || (err_mask & (1U << (n - 1)))) {
+        usage(argv[0]);
+        return rc;
+      }
+      err_mask |= 1U << (n - 1);
+    } else if (!strcmp(argv[i], "--ignore-arrival") && i + 1 < argc) {
+      unsigned n;
+      if (parse_u16(argv[++i], &n) || n < 1 || n > 6 || (arr_mask & (1U << (n - 1)))) {
+        usage(argv[0]);
+        return rc;
+      }
+      arr_mask |= 1U << (n - 1);
     } else if (!strcmp(argv[i], "--execute")) {
       execute++;
     } else if (!verb && (!strcmp(argv[i], "limits") ||
@@ -535,6 +552,7 @@ int main(int argc, char **argv) {
   if (!path || !verb || execute > 1 || seen_observe > 1 || seen_cal_tol > 1 ||
       observe_ms < 1000 || observe_ms > 10000 || observe_ms % 100 ||
       cal_tol < 1 || cal_tol > 100 ||
+      ((err_mask || arr_mask) && strcmp(verb, "move-six")) ||
       (!strcmp(verb, "limits") && (execute || seen_id || seen_delta || axis_mask ||
                                    tol_mask || seen_cal_tol || seen_observe)) ||
       (!strcmp(verb, "diagnose") && (execute || seen_id || seen_delta || axis_mask ||
@@ -671,12 +689,14 @@ int main(int argc, char **argv) {
     printf("calibrate-step id=%u delta=%d speed_raw=500 time_raw=10"
            " tolerance=%u observe_ms=%u\n", id, delta, cal_tol, observe_ms);
   } else if (!strcmp(verb, "move-six")) {
+    r[IGNORE / 4] = (arr_mask << 6) | err_mask;
     for (unsigned n = 0; n < 6; n++) {
       r[(TARGET0 + 4 * n) / 4] = goal[n];
       r[(PARAM0 + 4 * n) / 4] = (time_raw[n] << 16) | speed[n];
       printf("axis=%u target=%u speed_raw=%u time_raw=%u tolerance=%u"
              " torque=0x28:1\n", n + 1, goal[n], speed[n], time_raw[n], tol[n]);
     }
+    printf("ignore error_mask=0x%02x arrival_mask=0x%02x\n", err_mask, arr_mask);
   } else {
     puts("stop_requested=READ_six_then_SYNC_hold; completion_not_yet_confirmed");
   }

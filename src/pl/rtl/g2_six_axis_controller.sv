@@ -17,6 +17,9 @@ module g2_six_axis_controller #(
   input logic [5:0][31:0] speed_time,
   input logic [5:0][15:0] tolerance,
   input logic [7:0] observe_100ms, result_index,
+  // {到位掩码[5:0], 错误掩码[5:0]}，见 rtcs_pkg::REG_G2_SIX_IGNORE。
+  // 错误掩码只屏蔽 engine_fault==8（舵机自报 ERROR）；传输层故障（3..7）照常报。
+  input logic [11:0] ignore,
   input logic engine_done,
   input logic [3:0] engine_fault,
   input logic [7:0] engine_servo_error,
@@ -144,14 +147,16 @@ module g2_six_axis_controller #(
     all_last_inband = 1;
     all_feedback_valid = 1;
     for (int axis = 0; axis < 6; axis++) begin
-      if (start_valid[axis] && position_saved[axis] != start_saved[axis] &&
+      if (start_valid[axis] && !(mode == 2'd1 && ignore[6 + axis]) &&
+          position_saved[axis] != start_saved[axis] &&
           !changed_mask[axis]) begin
         missing_change = 1;
         if (!(engine_done && engine_fault == 0 &&
               feedback_axis == 3'(axis) && engine_position != start_saved[axis]))
           motion_ok = 0;
       end
-      if (start_valid[axis] && !inband_mask[axis]) all_last_inband = 0;
+      if (start_valid[axis] && !(mode == 2'd1 && ignore[6 + axis]) && !inband_mask[axis])
+        all_last_inband = 0;
       if (start_valid[axis] && !feedback_valid[axis]) all_feedback_valid = 0;
     end
   end
@@ -354,7 +359,9 @@ module g2_six_axis_controller #(
         if (mode == 2'd2 && sent_flag && log_count >= 8'd128) begin
           done_flag <= 1; error_flag <= 1; fault_code <= 8'd14;
           fault_axis <= cal_id; state <= IDLE;
-        end else if (engine_fault != 0) begin
+        end else if (engine_fault != 0 &&
+                     !(mode == 2'd1 && ignore[feedback_axis] && engine_fault == 4'd8) &&
+                     !(mode == 2'd3 && engine_fault == 4'd8)) begin
           engine_fault_saved <= {4'd0, engine_fault};
           servo_error_saved <= engine_servo_error;
           if (mode == 2'd2 && sent_flag) begin
@@ -389,15 +396,20 @@ module g2_six_axis_controller #(
             if (start_valid[feedback_axis] &&
                 engine_position != start_saved[feedback_axis])
               changed_mask[feedback_axis] <= 1;
-            inband_mask[feedback_axis] <=
-              (engine_position > position_saved[feedback_axis] ?
-               engine_position-position_saved[feedback_axis] :
-               position_saved[feedback_axis]-engine_position) <= arrival_band;
-            if ((engine_position > position_saved[feedback_axis] ?
-              engine_position - position_saved[feedback_axis] :
-              position_saved[feedback_axis] - engine_position) > arrival_band) begin
-              cycle_in_band <= 0;
-              fault_axis <= feedback_id;
+            if (mode == 2'd1 && ignore[6 + feedback_axis]) begin
+              // 到位掩码：该轴只要求"大致移动"，不参与容差判定
+              inband_mask[feedback_axis] <= 1'b1;
+            end else begin
+              inband_mask[feedback_axis] <=
+                (engine_position > position_saved[feedback_axis] ?
+                 engine_position-position_saved[feedback_axis] :
+                 position_saved[feedback_axis]-engine_position) <= arrival_band;
+              if ((engine_position > position_saved[feedback_axis] ?
+                engine_position - position_saved[feedback_axis] :
+                position_saved[feedback_axis] - engine_position) > arrival_band) begin
+                cycle_in_band <= 0;
+                fault_axis <= feedback_id;
+              end
             end
           end
           if (mode != 2'd2 && axis_index != 3'd5) begin
@@ -407,9 +419,10 @@ module g2_six_axis_controller #(
             axis_index <= 0;
             phase <= 8'd2; state <= WRITE_START;
           end else if (cycle_in_band && motion_ok &&
-            (engine_position > position_saved[feedback_axis] ?
+            ((mode == 2'd1 && ignore[6 + feedback_axis]) ||
+             (engine_position > position_saved[feedback_axis] ?
               engine_position - position_saved[feedback_axis] :
-              position_saved[feedback_axis] - engine_position) <= arrival_band) begin
+              position_saved[feedback_axis] - engine_position) <= arrival_band)) begin
             if (consecutive == 2'd2) begin
               done_flag <= 1; state <= IDLE;
             end else begin

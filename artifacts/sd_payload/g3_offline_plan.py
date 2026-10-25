@@ -9,7 +9,7 @@ import shlex
 import sys
 from pathlib import Path
 
-STEPS = ("standby", "approach", "grasp", "lift", "place", "exit")
+STEPS = ("standby", "approach", "grasp", "lift", "place", "retreat", "exit")
 ROOT = Path(__file__).resolve().parents[1]
 
 

@@ -23,7 +23,7 @@ module tb_g2_board_limits;
     .now_ticks(now_ticks),.deadline(deadline),.command(command),
     .bus_available(1'b1),.axis_id(axis_id),.delta_raw(delta_raw),
     .target(target),.speed_time(speed_time),
-    .tolerance({6{16'd30}}),.observe_100ms(8'd50),.result_index(8'd1),
+    .tolerance({6{16'd30}}),.observe_100ms(8'd50),.ignore(12'd0),.result_index(8'd1),
     .engine_done(engine_done),
     .engine_fault(4'd0),.engine_servo_error(8'd0),
     .engine_position(engine_position),.cal_log_index(8'd0),

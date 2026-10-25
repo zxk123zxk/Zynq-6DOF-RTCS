@@ -3,7 +3,7 @@
   "abi": "0x5254000E",
   "station": {
     "workspace_id": "bench-a",
-    "measured_boundary": "TODO: 工作区边界实测描述（抓取区 + 放置区范围，需现场补）",
+    "measured_boundary": "抓取区在传送带上游固定点，放置区在基座转至 2875 侧；两区之间经抬高位（ID2≈1240）中转，10-20 实测路径",
     "preflight": {
       "probe_log": "evidence/probe.log",
       "limits_log": "evidence/limits.log",
@@ -18,18 +18,257 @@
     "gripper_servo_id": 6,
     "gripper_actuator_id": "6",
     "gripper_mapping_confirmed": true,
-    "gripper_manual_procedure": "TODO: 夹爪开合人工验证流程描述",
+    "gripper_manual_procedure": "闭合目标 2400，实测停在 2411（物块上边缘接触、无过载）；张开目标 2760，实测 2759",
     "id5_fault_cleared_by_operator": true,
-    "id5_clearance_evidence": "TODO: ID5 放行证据文件名",
+    "id5_clearance_evidence": "evidence/joint_directions.md",
     "operator_confirmed": true,
-    "evidence": "TODO: 工位整体证据文件名"
+    "evidence": "evidence/g3-cycle-20261020.md"
   },
   "steps": [
-    {"name": "standby", "workspace_id": "bench-a", "target_count": [2060, 2060, 2163, 3004, 2005, 2500], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "2026-10-19T20:55", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "evidence/g3-grasp-20261019.log", "note": "不再回 10-17 复位位（移动传送带后该位会撞带，且空爪也不可达）；standby 与 grasp 同位，循环从抓取区开始"},
-    {"name": "approach", "workspace_id": "bench-a", "target_count": [2060, 2060, 2163, 3004, 2005, 2500], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "2026-10-19T20:25", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "evidence/g3-grasp-20261019.log", "note": "夹住即悬空，不需单独抬起；approach 与 grasp 同值"},
-    {"name": "grasp", "workspace_id": "bench-a", "target_count": [2060, 2060, 2163, 3004, 2005, 2500], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "2026-10-19T20:25", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "evidence/g3-grasp-20261019.log", "note": "六轴到位时夹爪保持张开 2500；闭合由 gripper 动作单独下发（过载=夹住，接触位置 2377 由 Hold 接管）", "gripper": {"command": "close", "target_count": 2200, "speed_raw": 500, "time_raw": 10, "expect_overload": true}},
-    {"name": "lift", "workspace_id": "bench-a", "target_count": [2060, 2060, 2163, 3004, 2005, 2500], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "2026-10-19T20:25", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "evidence/g3-grasp-20261019.log", "note": "原地保持，不做额外抬升"},
-    {"name": "place", "workspace_id": "bench-a", "target_count": [1164, 2433, 2030, 2723, 2013, 2500], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "2026-10-17T19:30", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "TODO: 放置位证据", "note": "到位途中 ID6 用抓取接触位置保持（不松开掉件）；到位后由 gripper 动作张开", "gripper": {"command": "open", "target_count": 2500, "speed_raw": 500, "time_raw": 10, "expect_overload": false}},
-    {"name": "exit", "workspace_id": "bench-a", "target_count": [2060, 2060, 2163, 3004, 2005, 2500], "speed_raw": [500, 500, 500, 500, 500, 500], "time_raw": [10, 10, 10, 10, 10, 10], "measured_at": "2026-10-19T20:55", "path_clear_confirmed": true, "operator_confirmed": true, "evidence": "evidence/g3-grasp-20261019.log", "note": "放置后回到抓取区（夹爪已张开），不再回 10-17 复位位"}
+    {
+      "name": "standby",
+      "workspace_id": "bench-a",
+      "target_count": [
+        2041,
+        2018,
+        2230,
+        2789,
+        2009,
+        2619
+      ],
+      "speed_raw": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "time_raw": [
+        10,
+        10,
+        10,
+        10,
+        10,
+        10
+      ],
+      "measured_at": "2026-10-20T15:57",
+      "path_clear_confirmed": true,
+      "operator_confirmed": true,
+      "evidence": "evidence/g3-cycle-20261020.md",
+      "note": "抓取准备位（夹爪张开 2619）；循环从这里开始"
+    },
+    {
+      "name": "approach",
+      "workspace_id": "bench-a",
+      "target_count": [
+        2041,
+        2018,
+        2230,
+        2789,
+        2009,
+        2619
+      ],
+      "speed_raw": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "time_raw": [
+        10,
+        10,
+        10,
+        10,
+        10,
+        10
+      ],
+      "measured_at": "2026-10-20T15:57",
+      "path_clear_confirmed": true,
+      "operator_confirmed": true,
+      "evidence": "evidence/g3-cycle-20261020.md",
+      "note": "与 standby 同位；下降路径由上一轮 exit 的抬高位负责"
+    },
+    {
+      "name": "grasp",
+      "workspace_id": "bench-a",
+      "target_count": [
+        2041,
+        2018,
+        2230,
+        2789,
+        2009,
+        2619
+      ],
+      "speed_raw": [
+        1000,
+        1000,
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "time_raw": [
+        10,
+        10,
+        10,
+        10,
+        10,
+        10
+      ],
+      "measured_at": "2026-10-20T15:57",
+      "path_clear_confirmed": true,
+      "operator_confirmed": true,
+      "evidence": "evidence/g3-cycle-20261020.md",
+      "note": "六轴到位时夹爪保持张开；闭合由 gripper 动作单独下发。闭合目标 2200（10-23 由 2300 改紧，实测接触位 ~2390-2401），过载由 PL 掩码屏蔽",
+      "gripper": {
+        "command": "close",
+        "target_count": 2200,
+        "speed_raw": 800,
+        "time_raw": 10,
+        "expect_overload": false
+      }
+    },
+    {
+      "name": "lift",
+      "workspace_id": "bench-a",
+      "target_count": [
+        2045,
+        1240,
+        2534,
+        3100,
+        2005,
+        2404
+      ],
+      "speed_raw": [
+        1200,
+        1200,
+        1200,
+        1200,
+        1200,
+        1200
+      ],
+      "time_raw": [
+        10,
+        10,
+        10,
+        10,
+        10,
+        10
+      ],
+      "measured_at": "2026-10-20T15:57",
+      "path_clear_confirmed": true,
+      "operator_confirmed": true,
+      "evidence": "evidence/g3-cycle-20261020.md",
+      "note": "抓取上抬位（带载抬升，速度 1200 留余量）；ID4 实测 3120 超出 PL 上限 3100，按 3100 下发（差 20，在容差内）"
+    },
+    {
+      "name": "place",
+      "workspace_id": "bench-a",
+      "target_count": [
+        2875,
+        2140,
+        2335,
+        2709,
+        2005,
+        2409
+      ],
+      "speed_raw": [
+        1200,
+        1200,
+        1200,
+        1200,
+        1200,
+        1200
+      ],
+      "time_raw": [
+        10,
+        10,
+        10,
+        10,
+        10,
+        10
+      ],
+      "measured_at": "2026-10-20T15:58",
+      "path_clear_confirmed": true,
+      "operator_confirmed": true,
+      "evidence": "evidence/g3-cycle-20261020.md",
+      "note": "放置位（基座转到 2875，带载横移 1200）；到位后由 gripper 动作张开到 2760",
+      "gripper": {
+        "command": "open",
+        "target_count": 2760,
+        "speed_raw": 900,
+        "time_raw": 10,
+        "expect_overload": false
+      }
+    },
+    {
+      "name": "retreat",
+      "workspace_id": "bench-a",
+      "target_count": [
+        2875,
+        1240,
+        2534,
+        3100,
+        2005,
+        2760
+      ],
+      "speed_raw": [
+        1400,
+        1400,
+        1400,
+        1400,
+        1400,
+        1400
+      ],
+      "time_raw": [
+        10,
+        10,
+        10,
+        10,
+        10,
+        10
+      ],
+      "measured_at": "2026-10-20T19:25",
+      "path_clear_confirmed": true,
+      "operator_confirmed": true,
+      "evidence": "evidence/g3-cycle-20261020.md",
+      "note": "退让位：**原位垂直抬到抬升角度，ID1 不动**，解决张爪后横移会刮倒已放下小方块的问题。ID2/3/4 直接复用已实测的 lift 抬升角度（1240/2534/3100），ID1 保持放置侧 2875 —— 该组合为推导值，首次跑请目视确认不擦碰；若 ID2 到不了 1240 就改 1400 再试"
+    },
+    {
+      "name": "exit",
+      "workspace_id": "bench-a",
+      "target_count": [
+        2045,
+        1240,
+        2534,
+        3100,
+        2005,
+        2619
+      ],
+      "speed_raw": [
+        1400,
+        1400,
+        1400,
+        1400,
+        1400,
+        1400
+      ],
+      "time_raw": [
+        10,
+        10,
+        10,
+        10,
+        10,
+        10
+      ],
+      "measured_at": "2026-10-20T19:25",
+      "path_clear_confirmed": true,
+      "operator_confirmed": true,
+      "evidence": "evidence/g3-cycle-20261020.md",
+      "note": "已在抬高位，只转基座 ID1 2875→2045 回抓取侧；ID6 保持张开 2619（不再拉回 2404）"
+    }
   ]
 }

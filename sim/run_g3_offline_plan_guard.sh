@@ -16,7 +16,7 @@ no_preflight="$build_dir/g3-plan-no-preflight.json"
 python3 - "$plan" "$no_clearance" "$out_of_range" "$no_preflight" <<'PY'
 import json, sys
 
-ORDER = ("standby", "approach", "grasp", "lift", "place", "exit")
+ORDER = ("standby", "approach", "grasp", "lift", "place", "retreat", "exit")
 
 station = {
     "operator_confirmed": True,

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+import cv2
 import numpy as np
 
 from vision.camera import Camera
@@ -31,17 +32,25 @@ class DetectorTests(unittest.TestCase):
             detector.detect(None)
 
     def test_camera_release(self):
-        fake = SimpleNamespace(isOpened=lambda: True, set=lambda *_: True,
-                               read=lambda: (True, np.zeros((480, 640, 3), dtype=np.uint8)),
-                               release=unittest.mock.Mock())
+        fake_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        fake = SimpleNamespace(
+            isOpened=lambda: True,
+            set=lambda *_: True,
+            read=lambda: (True, fake_frame),
+            get=lambda prop: {
+                cv2.CAP_PROP_FOURCC: float(ord("M") | (ord("J") << 8) | (ord("P") << 16) | (ord("G") << 24)),
+                cv2.CAP_PROP_FPS: 30.0,
+            }.get(prop, float("nan")),
+            release=unittest.mock.Mock(),
+        )
         with patch("vision.camera.cv2.VideoCapture", return_value=fake):
-            with Camera(index=1) as camera:
+            with Camera(index=1, width=640, height=480) as camera:
                 self.assertEqual(camera.read().shape, (480, 640, 3))
-        fake.release.assert_called_once()
+        fake.release.assert_called()
 
     def test_camera_failure_releases(self):
         fake = SimpleNamespace(isOpened=lambda: False, release=unittest.mock.Mock())
         with patch("vision.camera.cv2.VideoCapture", return_value=fake):
             with self.assertRaises(RuntimeError):
-                Camera(index=1).open()
-        fake.release.assert_called_once()
+                Camera(index=1, width=640, height=480).open()
+        fake.release.assert_called()

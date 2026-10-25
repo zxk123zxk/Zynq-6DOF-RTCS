@@ -21,7 +21,7 @@ module tb_g2_cal_log_overflow;
     .now_ticks(now_ticks),.deadline(deadline),.command(command),
     .bus_available(1'b1),.axis_id(32'd2),.delta_raw(32'd20),
     .target(target),.speed_time(speed_time),
-    .tolerance({6{16'd5}}),.observe_100ms(8'd50),.result_index(8'd2),
+    .tolerance({6{16'd5}}),.observe_100ms(8'd50),.ignore(12'd0),.result_index(8'd2),
     .engine_done(engine_done),.engine_fault(4'd0),
     .engine_servo_error(8'd0),.engine_position(engine_position),
     .cal_log_index(8'd127),.engine_start(engine_start),.engine_abort(),

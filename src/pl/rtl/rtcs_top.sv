@@ -72,6 +72,7 @@ module rtcs_top #(
   logic [31:0] six_start, six_result, six_diag;
   logic [5:0][15:0] six_tolerance;
   logic [7:0] six_observe_100ms;
+  logic [11:0] six_ignore;   // {到位掩码[5:0], 错误掩码[5:0]}
   logic [7:0] six_log_index;
   logic [7:0] limit_id;
   logic [31:0] limit_min, limit_max, limit_home, limit_speed_max;
@@ -165,7 +166,7 @@ module rtcs_top #(
     .g2_six_param(six_param), .g2_six_deadline(six_deadline),
     .g2_six_command(six_command), .g2_six_log_index(six_log_index),
     .g2_limit_id(limit_id), .g2_six_tolerance(six_tolerance),
-    .g2_six_observe_100ms(six_observe_100ms)
+    .g2_six_observe_100ms(six_observe_100ms), .g2_six_ignore(six_ignore)
   );
 
   for (genvar axis = 0; axis < 6; axis++) begin : six_descriptor_pack
@@ -187,6 +188,7 @@ module rtcs_top #(
     .axis_id(g2_id), .delta_raw(g2_expect),
     .target(six_target_packed), .speed_time(six_param_packed),
     .tolerance(six_tolerance), .observe_100ms(six_observe_100ms),
+    .ignore(six_ignore),
     .result_index(limit_id),
     .engine_done(g1_done), .engine_fault(g1_fault_code),
     .engine_servo_error(g1_servo_error), .engine_position(g1_position),

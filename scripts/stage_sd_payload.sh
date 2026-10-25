@@ -14,9 +14,15 @@ files=(
   scripts/g3_station_runner.py
   scripts/g3_offline_plan.py
   scripts/grasp_point_map.py
+  scripts/teach_add_point.py
   config/g2_measured_limits.toml
   config/g3_station_plan.json
   config/g3_station_plan.template.json
+)
+
+# 示教表存在就一起带上（视觉抓取必需）；不存在不报错——第一次上板本来就要现场建。
+optional=(
+  config/grasp_teaching_table.json
 )
 
 for file in "${files[@]}"; do
@@ -28,6 +34,14 @@ mkdir -p "$payload"
 for file in "${files[@]}"; do
   cp "$file" "$payload/"
 done
+for file in "${optional[@]}"; do
+  if [[ -s "$file" ]]; then
+    cp "$file" "$payload/"
+    echo "OPTIONAL_INCLUDED $file"
+  else
+    echo "OPTIONAL_ABSENT $file"
+  fi
+done
 
 # 1) 限位三处同源（toml / pkg / TTL 包装层）—— 这一项必须过，否则打包出去就是错的
 python3 scripts/check_limit_sync.py
@@ -35,7 +49,7 @@ python3 scripts/check_limit_sync.py
 # 2) 计划门禁状态（信息性，不阻塞打包）：dry-run 能过说明已填实；被拒说明还差示教
 python3 scripts/g3_station_runner.py "$payload/g3_station_plan.json" --once --dry-run \
   >/tmp/g3_stage_dryrun.out 2>&1 || true
-if grep -q '^G3_CYCLE end=1 success=1$' /tmp/g3_stage_dryrun.out; then
+if grep -q '^G3_CYCLE end=1 success=1' /tmp/g3_stage_dryrun.out; then
   echo "PLAN_STATUS filled (dry-run OK)"
 else
   echo "PLAN_STATUS NOT_RUNNABLE: $(grep -m1 '^G3_PLAN_REJECTED ' /tmp/g3_stage_dryrun.out || echo 'see /tmp/g3_stage_dryrun.out')"

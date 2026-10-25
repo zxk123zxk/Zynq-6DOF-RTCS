@@ -25,6 +25,8 @@ module tb_g2_six_axis_controller;
   logic force_far=0, fail_id3=0, fail_cal_feedback_id3=0, fail_write=0;
   logic fail_stop_feedback_id3=0, stop_write_seen=0;
   logic fail_status_post_id3=0, fail_status_post_id5=0;
+  logic fail_status_post_id6=0, id3_far=0;
+  logic [11:0] ignore_mask=0;
   logic fail_status_cal_ack=0;
   integer cal_feedback_shortfall=0;
   integer count_down=0, write_count=0, read_count=0;
@@ -45,7 +47,7 @@ module tb_g2_six_axis_controller;
     .now_ticks(now_ticks), .deadline(deadline), .command(command),
     .bus_available(bus_available), .axis_id(axis_id), .delta_raw(delta_raw),
     .target(target), .speed_time(speed_time),
-    .tolerance(tolerance), .observe_100ms(observe_100ms),
+    .tolerance(tolerance), .observe_100ms(observe_100ms), .ignore(ignore_mask),
     .result_index(8'd2),
     .engine_done(engine_done), .engine_fault(engine_fault),
     .engine_servo_error(engine_servo_error), .engine_position(engine_position),
@@ -66,7 +68,7 @@ module tb_g2_six_axis_controller;
     .now_ticks(now_ticks), .deadline(deadline), .command(blocked_command),
     .bus_available(1'b1), .axis_id(axis_id), .delta_raw(delta_raw),
     .target(target), .speed_time(speed_time),
-    .tolerance(tolerance), .observe_100ms(observe_100ms),
+    .tolerance(tolerance), .observe_100ms(observe_100ms), .ignore(12'd0),
     .result_index(8'd2),
     .engine_done(1'b0), .engine_fault(4'd0), .engine_servo_error(8'd0),
     .engine_position(16'd0), .cal_log_index(8'd0), .engine_start(blocked_start),
@@ -121,8 +123,11 @@ module tb_g2_six_axis_controller;
             engine_fault <= 8; engine_servo_error <= 8'h12;
           end else if (fail_status_post_id5 && pending_id == 5 && write_count != 0) begin
             engine_fault <= 8; engine_servo_error <= 8'h24;
+          end else if (fail_status_post_id6 && pending_id == 6 && write_count != 0) begin
+            engine_fault <= 8; engine_servo_error <= 8'h20;
           end
           else if (force_far) engine_position <= 16'd3000;
+          else if (id3_far && pending_id == 3) engine_position <= 16'd2100;
           else if (pending_id == 2 && !cal_write_seen) engine_position <= 16'd2000;
           else if (pending_id == 2 && cal_write_seen)
             engine_position <= 16'(int'(cal_goal)-cal_feedback_shortfall);
@@ -306,6 +311,29 @@ module tb_g2_six_axis_controller;
         diag[23:16]!=8'h40 || diag[15:8]!=2 || diag[3:0]!=8 || write_count!=1)
       $fatal(1,"unicast ACK servo ERROR byte/ID lost fault=%h diag=%h",fault,diag);
     fail_status_cal_ack=0;
+    // ── 逐轴忽略掩码：错误掩码 bit5=ID6，到位掩码 bit8=ID3 ──
+    @(negedge clk); rst_n=0;
+    repeat (3) @(negedge clk); rst_n=1;
+    fail_status_post_id6=1;
+    submit(1); wait_done();
+    if (fault[7:0]!=5 || fault[15:8]!=6 || !status[4])
+      $fatal(1,"unmasked ID6 servo ERROR was not rejected fault=%h",fault);
+    ignore_mask = 12'h020;              // 只屏蔽 ID6 的舵机 ERROR
+    submit(1); wait_done();
+    if (status[2] || fault[7:0]!=0)
+      $fatal(1,"ID6 error mask still failed status=%h fault=%h",status,fault);
+    ignore_mask = 0; fail_status_post_id6=0;
+    @(negedge clk); rst_n=0;
+    repeat (3) @(negedge clk); rst_n=1;
+    target[2]=2030; id3_far=1;          // ID3 停在 2100，超 30/15 容差
+    submit(1); wait_done();
+    if (fault[7:0]!=9)
+      $fatal(1,"unmasked ID3 out-of-band was accepted fault=%h",fault);
+    ignore_mask = 12'h100;              // 只屏蔽 ID3 的到位判定
+    submit(1); wait_done();
+    if (status[2] || fault[7:0]!=0)
+      $fatal(1,"ID3 arrival mask still failed status=%h fault=%h",status,fault);
+    ignore_mask = 0; id3_far=0;
     $display("TB_G2_SIX_AXIS_CONTROLLER_PASS writes=%0d reads=%0d",
       write_count,read_count);
     $finish;

@@ -51,6 +51,7 @@ def build(t, measured_at="2026-10-16T00:00"):
         step("grasp", t, measured_at, close),
         step("lift", t, measured_at),
         step("place", t, measured_at, open_),
+        step("retreat", t, measured_at),
         step("exit", t, measured_at),
     ]}
 plan_path, oor_path, ph_path, id2_path, teaching_path = sys.argv[1:6]
@@ -127,33 +128,34 @@ print("RTCS_PL_G2_OK id=6 target=2500 position_raw=2490 final_error=10"
       " actual_delta=UNAVAILABLE samples=12 elapsed_ms=700 timing=WITHIN_2S")
 PY
 
-# ── 1) 顺序与夹爪拆分：六步 6 次 move-six + 夹爪 2 次单轴 ──
+# ── 1) 顺序与夹爪拆分：七步 7 次 move-six + 夹爪 2 次单轴 ──
 : > "$B/g3-mock-order.log"
 MOCK_LOG="$B/g3-mock-order.log" \
   $runner "$plan" --once --six-cli "python3 $mock_ok" \
   --single-cli "python3 $mock_gripper" >"$B/g3-order.out" 2>&1
-grep -q '^G3_CYCLE end=1 success=1$' "$B/g3-order.out"
+grep -q '^G3_CYCLE end=1 success=1' "$B/g3-order.out"
 grep -q '^G3_RUN_SUMMARY cycles=1 failures=0 aborted=0$' "$B/g3-order.out"
-# 夹爪保持态（lift/place）走逐轴，不碰 ID6；其余四步走 move-six
-[[ $(grep -c ' move-six ' "$B/g3-mock-order.log") -eq 4 ]]
+# 全程六轴（夹爪过载由 PL 的 --ignore-error 6 屏蔽，不再降级逐轴）
+[[ $(grep -c ' move-six ' "$B/g3-mock-order.log") -eq 7 ]]
 [[ $(grep -c ' move --id 6 ' "$B/g3-mock-order.log") -eq 2 ]]
-[[ $(grep -cE ' move --id [1-5] ' "$B/g3-mock-order.log") -eq 10 ]]
-[[ $(grep -o -- '--axis ' "$B/g3-mock-order.log" | wc -l) -eq 24 ]]
+[[ $(grep -o -- '--axis ' "$B/g3-mock-order.log" | wc -l) -eq 42 ]]
 grep -q -- '--axis 1:2000:500:10' "$B/g3-mock-order.log"
 grep -q -- '--observe-ms 8000' "$B/g3-mock-order.log"
+# 每条六轴命令都屏蔽夹爪错误；除 grasp 外都放行 ID3 的到位判定
+[[ $(grep -c -- '--ignore-error 6' "$B/g3-mock-order.log") -eq 7 ]]
+[[ $(grep -c -- '--ignore-arrival 3' "$B/g3-mock-order.log") -eq 6 ]]
+# 夹持期间（lift/place）还必须放行 ID6 的到位判定，否则它会因过载漂移拖满观察期
+[[ $(grep -c -- '--ignore-arrival 6' "$B/g3-mock-order.log") -eq 2 ]]
 # 夹爪闭合是过载工况：判定为 CONTACT 而不是失败，接触位置 2360 留痕
-grep -q '^G3_STEP name=grasp.gripper result=CONTACT position=2360$' "$B/g3-order.out"
-grep -q '^G3_STEP name=place.gripper result=OK position=2490$' "$B/g3-order.out"
+grep -q '^G3_STEP name=grasp.gripper result=CONTACT elapsed_ms=[0-9]* position=2360' "$B/g3-order.out"
+grep -q '^G3_STEP name=place.gripper result=OK elapsed_ms=[0-9]* position=2490' "$B/g3-order.out"
 # grasp 步六轴到位时夹爪仍张开（2500），闭合目标不并进六轴命令
 grep -q -- '--axis 6:2500:500:10' "$B/g3-mock-order.log"
 
-# ── 2) 夹爪保持态逐轴搬运：lift/place 只动 ID1-5，ID6 不参与 ──
-grep -q '^G3_STEP name=lift result=OK gripper_hold=2360$' "$B/g3-order.out"
-grep -q '^G3_STEP name=place result=OK gripper_hold=2360$' "$B/g3-order.out"
-# 全程不应出现 move-six 带 ID6=2360 的保持写法（已改为逐轴）
-if grep -q -- '--axis 6:2360' "$B/g3-mock-order.log"; then
-  echo 'held transit still routes ID6 through move-six' >&2; exit 1
-fi
+# ── 2) 夹持段仍走六轴，ID6 用接触位置保持 ──
+grep -q '^G3_STEP name=lift result=OK elapsed_ms=[0-9]* gripper_hold=2360' "$B/g3-order.out"
+grep -q '^G3_STEP name=place result=OK elapsed_ms=[0-9]* gripper_hold=2360' "$B/g3-order.out"
+grep -q -- '--axis 6:2360:500:10' "$B/g3-mock-order.log"
 
 # ── 3) 故障留痕不锁死：grasp 失败 -> exit 安全回位 -> 本轮失败；--loop 2 继续第二轮 ──
 : > "$B/g3-mock-fail.log"; : > "$B/g3-mock-fail.count"
@@ -162,10 +164,10 @@ MOCK_LOG="$B/g3-mock-fail.log" MOCK_COUNT="$B/g3-mock-fail.count" \
   --single-cli "python3 $mock_gripper" >"$B/g3-fail.out" 2>&1 || true
 grep -q '^G3_STEP name=grasp result=FAIL fault=ERR g2_six_fault=5' "$B/g3-fail.out"
 grep -q '^G3_STEP name=exit result=OK recovery=true$' "$B/g3-fail.out"
-grep -q '^G3_CYCLE end=1 success=0$' "$B/g3-fail.out"
+grep -q '^G3_CYCLE end=1 success=0' "$B/g3-fail.out"
 grep -q '^G3_CYCLE start=2/2$' "$B/g3-fail.out"
 # 第一轮 grasp 失败、第二轮完整跑通：证明故障不锁死、下一轮能正常继续
-grep -q '^G3_CYCLE end=2 success=1$' "$B/g3-fail.out"
+grep -q '^G3_CYCLE end=2 success=1' "$B/g3-fail.out"
 grep -q '^G3_RUN_SUMMARY cycles=2 failures=1 aborted=0$' "$B/g3-fail.out"
 
 # ── 4) 越界计划必须被门禁拒绝，且不执行任何运动 ──
@@ -180,12 +182,12 @@ if ! $runner "$id2_over_cap" --once --dry-run --six-cli "python3 $mock_ok" \
     --single-cli "python3 $mock_gripper" >"$B/g3-id2.out" 2>&1; then
   echo 'ID2-over-hint plan was blocked; expected a warning only' >&2; exit 1
 fi
-grep -q 'G3_WARN grasp: ID 2 target 2130 above operating hint 2000' "$B/g3-id2.out"
+grep -q 'G3_WARN grasp: ID 2 target 2130 above operating hint 2020' "$B/g3-id2.out"
 
 # ── 5) 占位步：dry-run 允许打印，真跑必须拒绝（approach/lift 没示教就不许动） ──
 $runner "$placeholder" --once --dry-run --six-cli "python3 $mock_ok" \
   --single-cli "python3 $mock_gripper" >"$B/g3-ph-dry.out" 2>&1
-grep -q '^G3_CYCLE end=1 success=1$' "$B/g3-ph-dry.out"
+grep -q '^G3_CYCLE end=1 success=1' "$B/g3-ph-dry.out"
 grep -q 'DRY_RUN .*move-six' "$B/g3-ph-dry.out"
 if $runner "$placeholder" --once --six-cli "python3 $mock_ok" \
     --single-cli "python3 $mock_gripper" >"$B/g3-ph-run.out" 2>&1; then

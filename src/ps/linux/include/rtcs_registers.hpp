@@ -68,6 +68,8 @@ enum class Reg : std::uint32_t {
   kG2SixResult = 0x10c,
   kG2SixDiag = 0x110, // ERROR[23:16], phase[15:8], engine fault[3:0]
   kG2Start = 0x114, // ABI 14 保留地址，绝对运动读值为 0
+  kG2DiagSingle = 0x118, // 单轴故障锁存（只读）
+  kG2SixIgnore = 0x11c, // 只写：{到位掩码[11:6], 错误掩码[5:0]}
 };
 
 constexpr std::uint32_t kControlEnable = 1U << 0;

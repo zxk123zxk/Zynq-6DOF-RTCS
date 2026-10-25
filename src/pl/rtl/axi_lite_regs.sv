@@ -93,6 +93,7 @@ module axi_lite_regs #(
   output logic [7:0]                g2_limit_id,
   output logic [5:0][15:0]          g2_six_tolerance,
   output logic [7:0]                g2_six_observe_100ms,
+  output logic [11:0]               g2_six_ignore, // {到位掩码[5:0], 错误掩码[5:0]}
   output logic [1:0]                g2_six_command // 1=sync, 2=calibrate, 3=stop
 );
   import rtcs_pkg::*;
@@ -116,6 +117,7 @@ module axi_lite_regs #(
   logic [7:0] g2_limit_id_reg;
   logic [5:0][15:0] g2_six_tolerance_reg;
   logic [7:0] g2_six_observe_reg;
+  logic [11:0] g2_six_ignore_reg;
   integer read_axis_index;
   integer write_axis_index;
 
@@ -137,6 +139,7 @@ module axi_lite_regs #(
   assign g2_limit_id = g2_limit_id_reg;
   assign g2_six_tolerance = g2_six_tolerance_reg;
   assign g2_six_observe_100ms = g2_six_observe_reg;
+  assign g2_six_ignore = g2_six_ignore_reg;
   for (genvar axis = 0; axis < 6; axis++) begin : six_param_assign
     assign g2_six_param[axis] = g2_six_param_reg[axis];
   end
@@ -325,6 +328,7 @@ module axi_lite_regs #(
         g2_limit_id_reg >= 1 && g2_limit_id_reg <= 6 ?
         {16'd0, g2_six_tolerance_reg[g2_limit_id_reg-8'd1]} : 32'd0;
       REG_G2_SIX_OBSERVE: axi_data_to_read = {24'd0, g2_six_observe_reg};
+      REG_G2_SIX_IGNORE: axi_data_to_read = {20'd0, g2_six_ignore_reg};
       REG_G2_SIX_START: axi_data_to_read = g2_six_start;
       REG_G2_SIX_RESULT: axi_data_to_read = g2_six_result;
       REG_G2_SIX_DIAG: axi_data_to_read = g2_six_diag;
@@ -390,6 +394,7 @@ module axi_lite_regs #(
       g2_limit_id_reg <= '0;
       g2_six_tolerance_reg <= {6{16'd30}};
       g2_six_observe_reg <= 8'd50;
+      g2_six_ignore_reg <= 12'd0;
       for (write_axis_index = 0; write_axis_index < 6; write_axis_index++)
         g2_six_param_reg[write_axis_index] <= '0;
       for (write_axis_index = 0; write_axis_index < AXIS_COUNT; write_axis_index = write_axis_index + 1)
@@ -446,6 +451,8 @@ module axi_lite_regs #(
           g2_six_tolerance_reg[g2_limit_id_reg-8'd1] <= axi_wdata_buffer[15:0];
         REG_G2_SIX_OBSERVE: if (axi_wstrb_buffer == 4'hf)
           g2_six_observe_reg <= axi_wdata_buffer[7:0];
+        REG_G2_SIX_IGNORE: if (axi_wstrb_buffer == 4'hf)
+          g2_six_ignore_reg <= axi_wdata_buffer[11:0];
         REG_G2_SIX_CMD: if (axi_wstrb_buffer == 4'hf) begin
           if (axi_wdata_buffer == 32'h4732_0003) g2_six_command <= 2'd1;
           if (axi_wdata_buffer == 32'h4732_0004) g2_six_command <= 2'd2;
