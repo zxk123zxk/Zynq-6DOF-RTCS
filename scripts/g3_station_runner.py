@@ -605,8 +605,9 @@ def run_plan(plan: dict, uio: str, six_cli: str, single_cli: str, loops: int,
                     print(f"G3_RUN_SUMMARY cycles={cycle} failures={failures} aborted=1")
                     return failures
                 break
-        print(f"G3_CYCLE end={cycle} success={1 if ok_cycle else 0} "
-              f"grip={'empty' if empty_grip else 'contact'}")
+        # dry-run 下夹爪根本没动，写 contact 会误导人（首连链路测试时最容易看错）。
+        grip = "dry_run" if dry_run else ("empty" if empty_grip else "contact")
+        print(f"G3_CYCLE end={cycle} success={1 if ok_cycle else 0} grip={grip}")
         print(f"G3_CYCLE timing elapsed_ms={int((time.monotonic() - cycle_start) * 1000)}")
         if not ok_cycle:
             failures += 1
