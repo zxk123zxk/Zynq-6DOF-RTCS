@@ -17,10 +17,19 @@
 `stdout` 模式不是摆设：链路没通时它保证整个流程仍然可用，也是排障基线——
 如果 stdout 能抓中、udp 抓不中，问题一定在链路上，不在视觉或机械臂。
 
+**类别分流（2026-10-27 定）**：`--class-name cube` 时只抓 Cube，检出 Cylinder 一律
+**放行不抓**，并打印 `CAPTURE_PASS action=pass class=Cylinder`。放行是一条明确结论
+（看见了、认出来了、按规则不抓），不是"没看见"——演示与证据要能区分这两件事。
+默认 `--class-name any` 保持旧行为（取置信度最高者，不分类别）。
+
 用法：
     .\\env.cmd scripts\\capture_agent.py
     .\\env.cmd scripts\\capture_agent.py --udp 10.83.133.9:5005
     .\\env.cmd scripts\\capture_agent.py --once --json
+    .\\env.cmd scripts\\capture_agent.py --class-name cube --serial COM8
+
+**默认是常驻模式（2026-10-29 改）**：不需要手敲 `static capture`，检测到稳定目标就抓，
+抓完等带面清空 0.8 s 再武装，一直跑，**按 q 退出**。`--once` 才是跑一次就退。
 """
 from __future__ import annotations
 
@@ -37,10 +46,13 @@ import cv2
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import grasp_point as gp
+import keywatch
 from vision.detector import DEFAULT_MODEL, Detector
 from vision.plane_calibration import DEFAULT_PATH, PlaneCalibration
 
-TRIGGERS = ("static capture", "static_capture", "capture", "grab")
+# 连续多少帧"只有不抓的那一类"就当场判放行（不吃满 --timeout）。
+# 按 13/13 实测的 6 帧/0.5 s 算，4 帧≈0.33 s，圆柱在带上还能看清它就下结论。
+VETO_FRAMES = 4
 BOARD_CMD = ("sudo python3 scripts/g3_station_runner.py config/g3_station_plan.json "
              "--uio /dev/uio0 --grasp-xy {x:.2f},{y:.2f} "
              "--teaching-table config/grasp_teaching_table.json --once")
@@ -104,14 +116,40 @@ def open_stack(args):
     return calibration, detector, camera
 
 
-def do_capture(args, calibration, detector, camera, sampler: Sampler):
-    """抓一次点；稳定则返回 dict，超时返回 None（附原因）。"""
+def classify_veto(result, cls: int | None, calibration) -> object | None:
+    """本次检测里"看见了、但按类别规则不抓"的目标（取带面内置信度最高的那个）。
+
+    10-27 定：Cube 抓、Cylinder 放行。放行必须是**一条明确的结论**，不能等同于"没看见"
+    ——否则演示时观众分不清"认出了圆柱故意不抓"和"系统根本瞎了"。
+    只统计落在标定带面内的，避免把夹爪/背景误检当成"认出了一个圆柱"。
+    """
+    if cls is None:
+        return None
+    for item in sorted(result.detections, key=lambda d: d.confidence, reverse=True):
+        if item.class_id != cls and gp.inside_belt(calibration, item.center_x, item.center_y):
+            return item
+    return None
+
+
+def do_capture(args, calibration, detector, camera, sampler: Sampler,
+               quiet: bool = False, timeout: float | None = None):
+    """抓一次点。
+
+    返回点 dict；被类别规则放行返回 {"skip": True, ...}；超时返回 None。
+    ``quiet=True``（常驻模式）时，整段时间什么都没看见就不打 CAPTURE_FAIL——
+    带子空着本来就不该刷错误，否则日志会被"失败"淹没。
+    ``timeout`` 覆盖 ``--timeout``：常驻模式用短窗口轮询，新放上去的件能更快被发现。
+    """
     cls = gp.CLASS_FILTER[args.class_name]
+    window_s = args.timeout if timeout is None else timeout
     started = time.monotonic()
-    deadline = started + args.timeout
-    attempts, frames, no_target = 0, 0, 0
-    print("CAPTURE_START stable=%.2fs tol=%.1fmm timeout=%.1fs" %
-          (args.stable_s, args.tol_mm, args.timeout), flush=True)
+    deadline = started + window_s
+    attempts, frames, no_target, off_belt = 0, 0, 0, 0
+    # 被类别规则挡下的帧计数（按类名分开记，便于日志里说清"放行的是圆柱"）
+    vetoed: dict[str, int] = {}
+    veto_conf = 0.0
+    print("CAPTURE_START stable=%.2fs tol=%.1fmm timeout=%.1fs only=%s" %
+          (args.stable_s, args.tol_mm, window_s, args.class_name), flush=True)
 
     while time.monotonic() < deadline:
         frame = camera.read()
@@ -125,9 +163,26 @@ def do_capture(args, calibration, detector, camera, sampler: Sampler):
         target, n_all, margin = gp.pick_target(result, cls, calibration)
         if target is None:
             no_target += 1
+            veto = classify_veto(result, cls, calibration)
+            if veto is not None:
+                vetoed[veto.class_name] = vetoed.get(veto.class_name, 0) + 1
+                veto_conf = max(veto_conf, veto.confidence)
+                if attempts == 0 and vetoed[veto.class_name] >= VETO_FRAMES:
+                    # 连续 VETO_FRAMES 帧只看见"不抓的那一类"、且从没出现过合法目标
+                    # → 当场判放行。等满 --timeout 的话，演示时圆柱早走出画面了。
+                    return _pass_result(vetoed, veto_conf, frames)
             sampler.drop_if_lost(now)
             continue
         x_mm, y_mm = calibration.to_mm(target.center_x, target.center_y)
+        if not gp.inside_belt(calibration, target.center_x, target.center_y):
+            # 中心落在标定带面外的检测不是工件。10-25 记过吸顶灯被当成 Cube
+            # （conf 0.30~0.36）；10-27 又实测到 y=150 mm 的假目标（带面只到 80 mm），
+            # conf 0.26 却照样出点。这类点喂给 --grasp-xy 会被插值两端夹住、
+            # "变成任意的合法姿态"，臂就去抓空气——比不出点更糟。
+            # 所以不采用；但只计数+告警，计时器照常走完，结论仍由超时给出。
+            off_belt += 1
+            sampler.drop_if_lost(now)
+            continue
         sampler.add(now, x_mm, y_mm, target.confidence)
         sampler.prune(now)
         attempts += 1
@@ -150,14 +205,30 @@ def do_capture(args, calibration, detector, camera, sampler: Sampler):
             print("  sampling n=%d x=%.1f y=%.1f conf=%.2f" %
                   (len(sampler.samples), x_mm, y_mm, target.confidence), flush=True)
 
-    print("CAPTURE_FAIL reason=timeout frames=%d no_target=%d samples=%d"
-          % (frames, no_target, len(sampler.samples)), flush=True)
+    if vetoed and attempts == 0:
+        return _pass_result(vetoed, veto_conf, frames)
+    if not (quiet and attempts == 0):
+        print("CAPTURE_FAIL reason=timeout frames=%d no_target=%d off_belt=%d samples=%d"
+              % (frames, no_target, off_belt, len(sampler.samples)), flush=True)
+    if off_belt and not quiet:
+        print("CAPTURE_WARN 有 %d 帧的检测中心落在标定带面外（判为背景误检，已丢弃）"
+              % off_belt, flush=True)
     if sampler.samples:
         xs = [s[1] for s in sampler.samples]
         ys = [s[2] for s in sampler.samples]
         print("CAPTURE_WARN 最近一段的极差 x=%.1f y=%.1f mm（阈值 %.1f）：目标在动，或框在跳"
               % (max(xs) - min(xs), max(ys) - min(ys), args.tol_mm), flush=True)
     return None
+
+
+def _pass_result(vetoed: dict[str, int], veto_conf: float, frames: int) -> dict:
+    """按类别规则放行的结果。不是失败：什么都不发、不产生运动。"""
+    name = max(vetoed, key=lambda key: vetoed[key])
+    print("CAPTURE_PASS action=pass class=%s conf=%.2f frames=%d hits=%d "
+          "（只抓 cube，这一类按规则放行）"
+          % (name, veto_conf, frames, vetoed[name]), flush=True)
+    return {"skip": True, "class_name": name, "conf": round(veto_conf, 3),
+            "hits": vetoed[name], "frames": frames}
 
 
 def send(args, packet: dict, point: dict) -> dict | None:
@@ -203,6 +274,7 @@ def send(args, packet: dict, point: dict) -> dict | None:
                   "控制台程序会独占端口）" % (args.serial, error), flush=True)
             return None
         lines: list[str] = []
+        shell_ate_it = False
         with port:
             port.write((line + "\n").encode("utf-8"))
             port.flush()
@@ -227,10 +299,22 @@ def send(args, packet: dict, point: dict) -> dict | None:
                         reply = parsed
                         break
                 lines.append(text)
+                # 板端没有 server 占住这条控制台时，我们发的这行 JSON 会被 shell 当成命令
+                # 执行，回显里必然出现 "command not found"，随后弹回 "#" 提示符。
+                # 这时等满 --reply-timeout 毫无意义，立刻收尾并把该做什么说清楚。
+                if "command not found" in text or text.endswith("#"):
+                    shell_ate_it = True
+                    break
         if lines:
             print("BOARD_LOG 前 %d 行板端输出：" % min(len(lines), 14), flush=True)
             for text in lines[:14]:
                 print("  " + text[:160], flush=True)
+        if reply is None and shell_ate_it:
+            print("CAPTURE_FAIL 板端没有 server 在占住控制台：这行 JSON 被 shell 当命令执行了。"
+                  "先在那条串口控制台上跑 "
+                  "sudo python3 scripts/static_grasp_server.py --source stdin，"
+                  "看到 SERVER_READY 再重发（坐标已打印，可人工兜底）", flush=True)
+            return None
         if reply is None:
             print("CAPTURE_FAIL 串口 %.0fs 内没等到 REPLY（板端 server 在跑吗？"
                   "起 --source stdin）" % args.reply_timeout, flush=True)
@@ -246,6 +330,12 @@ def main(argv=None) -> int:
     parser.add_argument("--stable-s", type=float, default=0.5, help="稳定窗口（秒）")
     parser.add_argument("--tol-mm", type=float, default=2.0, help="稳定判据的极差上限")
     parser.add_argument("--timeout", type=float, default=6.0, help="单次取点超时")
+    parser.add_argument("--auto-timeout", type=float, default=2.0,
+                        help="常驻模式每次轮询的窗口（秒）。短一点，新放上去的件能更快被发现")
+    parser.add_argument("--dup-mm", type=float, default=8.0,
+                        help="防重抓：和上次下发的位置相差不到这么多 mm 就当作同一件")
+    parser.add_argument("--retry-after-s", type=float, default=3.0,
+                        help="防重抓：同一位置在这么多秒内不重复下发（夹空后重试要等）")
     parser.add_argument("--once", action="store_true", help="只抓一次就退出")
     parser.add_argument("--json", action="store_true", help="只输出一行 JSON")
     parser.add_argument("--log", type=Path, help="追加一行 JSONL（证据留痕）")
@@ -287,30 +377,77 @@ def main(argv=None) -> int:
         if args.once:
             exit_code = one_shot(args, calibration, detector, camera, sampler)
         else:
-            print("就绪：输入 static capture 取点并抓取，q 退出", flush=True)
-            while True:
-                try:
-                    line = input("> ").strip()
-                except (EOFError, KeyboardInterrupt):
-                    break
-                if not line:
-                    continue
-                if line.lower() in ("q", "quit", "exit"):
-                    break
-                if line.lower() not in TRIGGERS:
-                    print("只认 %s" % " / ".join(TRIGGERS), flush=True)
-                    continue
-                sampler.samples.clear()
-                one_shot(args, calibration, detector, camera, sampler)
+            exit_code = auto_loop(args, calibration, detector, camera, sampler)
     finally:
         camera.close()
     return exit_code
 
 
+def auto_loop(args, calibration, detector, camera, sampler) -> int:
+    """常驻模式：一直跑，抓完立刻按 x 从大到小抓下一件，按 q 退出。
+
+    三条纪律：
+      1. 发命令之后到回执之前**不做检测**——板端一动夹爪就进画面（还会被误检成 Cube）；
+      2. 回执之后**立刻重新武装**，不要求场景清空：传送带上常常还有别的件，
+         要求"清空"只会白等（10-29 踩过，死等 20 s）；
+      3. 防重抓靠**位置去重**，不靠场景清空：同一位置（±dup_mm）刚试过，
+         `--retry-after-s` 秒内不再重复下发；不同位置（多件）则立刻抓下一件。
+    """
+    print("CAPTURE_READY 常驻模式：按 x 从大到小依次抓，按 q 退出", flush=True)
+    last_x = None
+    last_t = 0.0
+    index = 0
+    while True:
+        if "q" in keywatch.poll():
+            print("CAPTURE_INFO 按 q 退出", flush=True)
+            return 0
+        sampler.samples.clear()
+        index += 1
+        print("CAPTURE_CYCLE start=%d" % index, flush=True)
+        point = do_capture(args, calibration, detector, camera, sampler, quiet=True,
+                           timeout=args.auto_timeout)
+        if point is None or point.get("skip"):
+            continue
+        now = time.monotonic()
+        duplicate = (last_x is not None
+                     and abs(point["x_mm"] - last_x) <= args.dup_mm
+                     and now - last_t < args.retry_after_s)
+        if duplicate:
+            # 同一件还在原地（上一次夹空）或刚试过：等一会儿再看，不重复下发。
+            time.sleep(0.2)
+            continue
+        deliver(args, point)
+        last_x, last_t = point["x_mm"], time.monotonic()
+
+
 def one_shot(args, calibration, detector, camera, sampler) -> int:
+    """取一次点并按结果分发（--once 和手动敲命令都走这里）。"""
     point = do_capture(args, calibration, detector, camera, sampler)
     if point is None:
         return 4
+    return deliver(args, point)
+
+
+def deliver(args, point: dict) -> int:
+    """把一个已确定的点送出去并记录；放行分支也在这里。"""
+    if point.get("skip"):
+        # 放行：不发串口、不产生运动帧。按规则这是正常结果（退出码 0），
+        # 但必须留一行可统计的记录——演示与证据里要能说"这一次是认出了圆柱才放走的"。
+        record = {"timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                  "action": "pass", "class_name": point["class_name"],
+                  "conf": point["conf"], "hits": point["hits"],
+                  "frames": point["frames"], "class_filter": args.class_name,
+                  "source": "capture_agent/%s" % args.transport}
+        if args.log:
+            try:
+                args.log.parent.mkdir(parents=True, exist_ok=True)
+                with args.log.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+            except OSError as error:
+                print("CAPTURE_WARN log_failed %s" % error, file=sys.stderr)
+        if args.json:
+            print(json.dumps(record, ensure_ascii=False), flush=True)
+        return 0
 
     packet = {"cmd": "static_capture", "trigger": "static capture",
               "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"), **point,

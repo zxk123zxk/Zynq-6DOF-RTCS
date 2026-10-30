@@ -12,6 +12,14 @@ mkdir -p build/sim
 runner="python3 scripts/g3_station_runner.py"
 B="build/sim"
 
+# ── 0) 板端 Python 兼容：3.12 才允许的语法（f-string 嵌套同类引号）在板上是 SyntaxError ──
+# 本地 py_compile 用 3.13 看不出来；2026-10-29 因此白跑一趟上板（runner 231 ms 退出、
+# 一行 G3_ 输出都没有，看着像"什么都没发生"）。
+python3 scripts/check_py_compat.py scripts/*.py >"$B/py-compat.out" 2>&1 || {
+  cat "$B/py-compat.out" >&2
+  exit 1
+}
+
 # ── 生成 fixture：已确认、含夹爪动作、越界版、占位版 ──
 plan="$B/g3-station-confirmed.json"
 out_of_range="$B/g3-station-out-of-range.json"
@@ -209,5 +217,96 @@ if $runner "$plan" --once --grasp-xy 0,0 --six-cli "python3 $mock_ok" \
     --single-cli "python3 $mock_gripper" >"$B/g3-grasp-no-table.out" 2>&1; then
   echo '--grasp-xy without --teaching-table was accepted' >&2; exit 1
 fi
+
+# ── 8) --stop-after grasp：走到拦截位就收尾，夹爪保持张开、绝不闭爪 ──
+# 这是动态拦截"提前就位"的入口：臂停在抓取位等外部触发，闭爪必须留给后面单独下发。
+: > "$B/g3-mock-stop.log"
+MOCK_LOG="$B/g3-mock-stop.log" \
+  $runner "$plan" --once --grasp-xy 120.5,-30.0 --teaching-table "$teaching" \
+  --stop-after grasp --six-cli "python3 $mock_ok" \
+  --single-cli "python3 $mock_gripper" >"$B/g3-stop.out" 2>&1
+grep -q '^G5_READY_AT step=grasp' "$B/g3-stop.out"
+grep -q '^G3_CYCLE end=1 success=1 grip=open stopped_after=grasp' "$B/g3-stop.out"
+# --grasp-xy 会跳过 standby，所以只走 approach + grasp 两条六轴命令
+[[ $(grep -c ' move-six ' "$B/g3-mock-stop.log") -eq 2 ]]
+# 夹爪一次都没动过（这一刀的全部意义所在）
+[[ $(grep -c ' move --id 6 ' "$B/g3-mock-stop.log") -eq 0 ]]
+# 后面的 lift/place/retreat/exit 一个都不许出现
+for later in lift place retreat exit; do
+  if grep -q "^G3_STEP name=$later " "$B/g3-stop.out"; then
+    echo "stop-after grasp still executed $later" >&2; exit 1
+  fi
+done
+
+# ── 9) --resume close：臂已在拦截位，只闭爪 + 搬运 ──
+# 动态拦截的后半段：movement 一步都不许有，**第一条运动命令必须是夹爪闭合**。
+: > "$B/g3-mock-resume.log"
+MOCK_LOG="$B/g3-mock-resume.log" \
+  $runner "$plan" --once --grasp-xy 120.5,-30.0 --teaching-table "$teaching" \
+  --resume close --six-cli "python3 $mock_ok" \
+  --single-cli "python3 $mock_gripper" >"$B/g3-resume.out" 2>&1
+grep -q '^G3_STEP name=approach result=SKIPPED elapsed_ms=0 reason=resume_close' "$B/g3-resume.out"
+grep -q '^G3_STEP name=grasp result=SKIPPED elapsed_ms=0 reason=resume_close' "$B/g3-resume.out"
+grep -q '^G3_STEP name=grasp.gripper result=CONTACT' "$B/g3-resume.out"
+grep -q '^G3_STEP name=lift result=OK*' "$B/g3-resume.out"
+grep -q 'gripper_hold=2360' "$B/g3-resume.out"
+grep -q '^G3_CYCLE end=1 success=1 grip=contact' "$B/g3-resume.out"
+# 闭爪必须是第一条运动命令（否则"提前量"又被舵机吃回去了）
+head -1 "$B/g3-mock-resume.log" | grep -q ' move --id 6 '
+# 闭爪之后才轮到 lift/place/retreat/exit 四条六轴命令（retreat 也是整步 move-six）
+[[ $(grep -c ' move-six ' "$B/g3-mock-resume.log") -eq 4 ]]
+
+# ── 10) --resume lift：闭爪已由 server 的 C 快路径做完，runner 从 lift 起 ──
+# 这一刀的意义是把 880 ms 的 Python 启动从"闭爪关键路径"挪到"已经夹住之后"。
+: > "$B/g3-mock-lift.log"
+MOCK_LOG="$B/g3-mock-lift.log" \
+  $runner "$plan" --once --grasp-xy 120.5,-30.0 --teaching-table "$teaching" \
+  --resume lift --grip-hold 2360 --six-cli "python3 $mock_ok" \
+  --single-cli "python3 $mock_gripper" >"$B/g3-lift.out" 2>&1
+grep -q '^G3_STEP name=grasp result=SKIPPED elapsed_ms=0 reason=resume_lift' "$B/g3-lift.out"
+grep -q '^G3_STEP name=lift result=OK' "$B/g3-lift.out"
+grep -q 'gripper_hold=2360' "$B/g3-lift.out"
+# 闭爪（target 2200）绝不能再发一次：已经合上了，重发只会多花 1.4 s
+if grep -q -- '--target 2200' "$B/g3-mock-lift.log"; then
+  echo 'resume lift re-sent the close command' >&2; exit 1
+fi
+# 夹爪只应出现一次（place 的张开 2500）
+[[ $(grep -c ' move --id 6 ' "$B/g3-mock-lift.log") -eq 1 ]]
+[[ $(grep -c ' move-six ' "$B/g3-mock-lift.log") -eq 4 ]]
+
+# ── 11) --resume lift 缺 --grip-hold 必须报参数错误 ──
+if $runner "$plan" --once --grasp-xy 120.5,-30.0 --teaching-table "$teaching" \
+    --resume lift --six-cli "python3 $mock_ok" \
+    --single-cli "python3 $mock_gripper" >"$B/g3-lift-nohold.out" 2>&1; then
+  echo '--resume lift without --grip-hold was accepted' >&2; exit 1
+fi
+
+# ── 12) --resume place：闭爪和抬升都已由 server 的 C 快路径做完，runner 从 place 起 ──
+# 这是"取消咬合后空档"的一刀：臂不再被传送带拽着对抗 ~1.8 s。
+: > "$B/g3-mock-place.log"
+MOCK_LOG="$B/g3-mock-place.log" \
+  $runner "$plan" --once --grasp-xy 120.5,-30.0 --teaching-table "$teaching" \
+  --resume place --grip-hold 2360 --six-cli "python3 $mock_ok" \
+  --single-cli "python3 $mock_gripper" >"$B/g3-place.out" 2>&1
+grep -q '^G3_STEP name=lift result=SKIPPED elapsed_ms=0 reason=resume_place' "$B/g3-place.out"
+grep -q '^G3_STEP name=place result=OK' "$B/g3-place.out"
+grep -q 'gripper_hold=2360' "$B/g3-place.out"
+# lift 不许再发一次六轴命令：只剩 place / retreat / exit 三条
+[[ $(grep -c ' move-six ' "$B/g3-mock-place.log") -eq 3 ]]
+# 闭爪（target 2200）绝不能再发
+if grep -q -- '--target 2200' "$B/g3-mock-place.log"; then
+  echo 'resume place re-sent the close command' >&2; exit 1
+fi
+
+# ── 13) --grasp-id2-offset：只改 approach/grasp 的 ID2，其它轴不动 ──
+$runner "$plan" --once --dry-run --grasp-xy 120.5,-30.0 \
+  --teaching-table "$teaching" --grasp-id2-offset -50 \
+  --six-cli "python3 $mock_ok" --single-cli "python3 $mock_gripper" \
+  >"$B/g3-id2offset.out" 2>&1
+grep -q 'G3_INFO grasp ID2 offset -50' "$B/g3-id2offset.out"
+# 表里 120.5 那一点 ID2=1111，减 50 应为 1061；ID1/ID3 保持原值
+grep -q -- '--axis 1:2222:500:10' "$B/g3-id2offset.out"
+grep -q -- '--axis 2:1061:500:10' "$B/g3-id2offset.out"
+grep -q -- '--axis 3:2777:500:10' "$B/g3-id2offset.out"
 
 echo RTCS_G3_STATION_RUNNER_GUARD_PASS

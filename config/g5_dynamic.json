@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "note": "G5 动态拦截（传送带匀速 + 预测拦截）的运行参数。speed_mm_s 为 null 时脚本拒绝计算（不是门禁，是没法除），先用 scripts/g5_belt_profile.py 实测再填，或命令行 --speed 临时给值。",
+  "belt": {
+    "direction": "+x",
+    "direction_note": "+x 表示物块沿标定 +x 走（x 变大）。实测为 -x 时拦截点必须在检测线上游，脚本会按 direction 自动换号。",
+    "speed_mm_s": 67.14,
+    "speed_measured_at": "2026-10-29T18:20:17",
+    "speed_method": "g5_belt_profile.py samples=50"
+  },
+  "geometry": {
+    "belt_range_mm": [
+      0,
+      490
+    ],
+    "detection_line_x_mm": 120.0,
+    "detection_line_note": "上游参考线。只作触发判据（越线 = t0），真实提前量按当帧 x 现算，所以它允许有几十 mm 误差。",
+    "intercept_window_mm": [
+      350.0,
+      390.0
+    ],
+    "intercept_window_note": "拦截点在这段里按带速现算：x_int = 物块位置 + v×(advance+move+margin)。每次不同，插值才真正起作用；写死一个点等于放弃 x 这一维。",
+    "intercept_x_mm": 370.0,
+    "intercept_source": "示教表已教点 370。只在 --x-intercept 强制固定点、或 --pre-stage 老流程时使用（改这点要确认 ID2 不越过 ~1990 竖直点）。",
+    "intercept_id2_offset": -50,
+    "intercept_id2_offset_note": "拦截位 ID2 的偏移，**现场指定值不是推算**（用户 10-29 观察：抬高一点后上夹臂合拢会把方块掀起一角，与传送带的接触面变小，咬合后那 0.5~1 s 的摩擦对抗明显减弱）。只作用于 dynamic_stage，不动静态路径。",
+    "min_upstream_mm": 30.0,
+    "min_upstream_note": "物块中心离拦截点小于这个距离就不算候选（已经来不及，按规则跳过并告警）。"
+  },
+  "timing": {
+    "advance_ms": 300,
+    "advance_note": "臂到位后到咬合的时间（= 闭爪命令发出到接触，约 270 ms：spawn ~50 + 发帧 ~10 + 舵机行程 ~210）。**2026-10-29 起改为'臂一报到位就立刻闭爪'**，这个值只用来算 t_stage（臂该什么时候出发），不再用来在 PC 侧 sleep。",
+    "move_to_pose_ms": 1950,
+    "move_to_pose_note": "从发 dynamic_stage 到臂到位。2026-10-29 实测 1936 / 1953 ms（两次，x=370），含 python 启动 ~880 ms。**臂不在 exit 高位时这个数不成立**（复位后首动实测 4.2 s），所以每轮结束都要回到 exit。到位偏早/偏晚超过 150 ms 时日志会打 G5_WARN，按实测改这个数。",
+    "stage_margin_ms": 0,
+    "stage_margin_note": "额外提前量（正值 = 让臂更早出发、更早咬合）。现在闭爪跟着臂到位走，这一项只做微调用：正 30~50 可以把咬合点往前拉一点点。",
+    "grip_close": {
+      "target": 2200,
+      "speed": 1500,
+      "observe_ms": 1000
+    },
+    "grip_close_note": "闭爪目标/速度/观测窗口。speed 上限 1500（PL 限制）；speed 800→1500 把全程 757 ms 压到约 404 ms，接触提前到约 210 ms。**observe_ms 下限是 1000**（rtcs-pl-g2 只接受 1000..10000、且必须是 100 的倍数）——10-29 给 600 被 C 命令判参数错误、一条帧都没发，表现是 grip=fault 然后 lift 把物块扫下带。",
+    "reply_timeout_s": 30.0
+  },
+  "lane": {
+    "note": "示教表只有 y=36 一条车道（6 点全 y=36、same_lane=yes → 插值只沿 x）。物块的 y 必须落在夹爪容差内，否则一定夹空：10-29 实测 y=55.2 夹空、y=59.9 夹住。这个坑靠代码解决不了 —— 先验标定（grasp_point.py 看 belt_quad_mismatch iou），再考虑挡边/导轨把物块约束到固定车道。"
+  },
+  "policy": {
+    "class_filter": "cube",
+    "target_choice": "rightmost",
+    "target_choice_note": "黄框内多个可抓物时取 x 最大的（下游那件最先到拦截点）。此规则实现在 grasp_point.pick_target，与静态抓取共用。"
+  }
+}

@@ -47,29 +47,43 @@ BACKEND_ORDER = ("dshow", "msmf", "any")
 
 
 def pick_target(result, cls: int | None, calibration: "PlaneCalibration | None" = None):
-    """每帧只取一个目标：按置信度最高的那个（竞赛轨不分类别，见 10.15 定案）。
+    """每帧只取一个目标：**黄框（标定带面四边形）内 x 最大的那个**。
 
-    同时返回 top1 与 top2 的置信度差。10-25 实测：镜头里那只白色夹爪会被稳定检出成
-    Cube（conf 0.36~0.43），真方块 0.79~0.80。差 0.4 时取最高是对的；差得少就说明
-    "两个都像"，那时出的点不可信——用 margin 把这个区分度报出来，而不是悄悄取一个。
+    2026-10-29 定（用户要求）：框里有多个可抓物时，优先抓最右边（x 最大）的那一件。
+    物理理由与动态抓取是同一条：物块沿 +x 走，**最右边那件最先到拦截点**；静态下这条
+    规则也无害——它把"先抓下游那件"固定成可复现的次序，而不是随置信度跳来跳去。
 
-    **软 ROI（10-25 加）**：给了标定就优先在带面四边形内的目标里选。夹爪那个点在
-    (1036, 634)，远在四边形下方（该 x 处只到 y≈379），会被直接排除。
-    只在框内一个都没有时才退回"全体里最高置信度"——**不硬拒**，否则贴着带边放的
-    方块会被自己的 ROI 判死。
+    **软 ROI**：给了标定就只在带面四边形内选。一个都没有时才退回"全体里 x 最大的"，
+    不在这里硬拒——否则贴着带边放的方块会被自己的 ROI 判死；是否真的在带内由调用方
+    （capture_agent 的 off_belt 检查）再判一次。
+
+    **margin 仍然按置信度算**（选中的比次优的高多少）：改成按 x 排序后，这个差值依然是
+    "两个都像"的唯一信号。10-25 实测夹爪会被检出成 Cube（conf 0.36~0.43）、真方块 0.79~0.80，
+    差 0.4 时取哪个都行，差得少就说明当帧不可信。
     """
     items = [d for d in result.detections if cls is None or d.class_id == cls]
     if not items:
         return None, 0, None
-    items.sort(key=lambda d: d.confidence, reverse=True)
     if calibration is not None:
         inside = [d for d in items if inside_belt(calibration, d.center_x, d.center_y)]
         if inside:
             items = inside
-    margin = None
-    if len(items) > 1:
-        margin = items[0].confidence - items[1].confidence
-    return items[0], len(result.detections), margin
+    items.sort(key=lambda d: (_axis_x(calibration, d), d.confidence), reverse=True)
+    chosen = items[0]
+    others = [d.confidence for d in items[1:]]
+    margin = chosen.confidence - max(others) if others else None
+    return chosen, len(result.detections), margin
+
+
+def _axis_x(calibration, item) -> float:
+    """排序用的 x：有标定就用毫米（与抓取点同一坐标系，精确），否则退回像素。
+
+    像素序与毫米序在标定单调时一致，但毫米序才是"下游优先"的真实含义，且透视项
+    在画面边缘会让像素序与毫米序出现小差，直接用毫米省掉解释。
+    """
+    if calibration is None:
+        return float(item.center_x)
+    return calibration.to_mm(item.center_x, item.center_y)[0]
 
 
 def open_camera(index: int, backend: str, exposure: int | None,

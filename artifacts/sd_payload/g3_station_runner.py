@@ -502,20 +502,32 @@ def run_place(uio: str, item: dict, six_cli: str, single_cli: str, targets: list
 
 def run_plan(plan: dict, uio: str, six_cli: str, single_cli: str, loops: int,
              observe_ms: int, transit: str, dry_run: bool,
-             skip_steps: frozenset = frozenset()) -> int:
+             skip_steps: frozenset = frozenset(),
+             stop_after: str | None = None,
+             resume: str | None = None,
+             grip_hold: int | None = None) -> int:
     """顺序执行 loops 轮六步；返回失败轮数。
 
     ``skip_steps`` 里的步整步跳过（只给 standby 用），跳过不改变成败判定。
+    ``stop_after`` 命中某步后**在该步的六轴到位之后、夹爪动作之前**收尾退出，
+    给动态拦截做"臂先到拦截位、夹爪保持张开、等外部触发再闭爪"用（见 docs/5.G5）。
+    ``resume="close"`` 是它的后半段：臂已在拦截位，跳过 standby/approach/grasp 的移动，
+    直接执行 grasp 步的夹爪闭合，然后 lift/place/retreat/exit 照常。
     """
     steps = plan["steps"]
     by_name = {s["name"]: s for s in steps}
     failures = 0
+    # 时间基准点：CLOCK_MONOTONIC 跨进程同一时钟，与 server 的 ARM_CMD/SERVER_ACCEPT
+    # 的 mono_ms 可直接相减 → 父子进程启动、载计划、校验这一段就能单独算出来。
+    print("G3_T0 mono_ms=%.1f steps=%d" % (time.monotonic() * 1000.0, len(steps)))
     for cycle in range(1, loops + 1):
         print(f"G3_CYCLE start={cycle}/{loops}")
         cycle_start = time.monotonic()
         ok_cycle = True
         empty_grip = False           # 本次循环是否出现过"合到底但没夹住"
-        hold: int | None = None      # 夹爪接触位置；闭合后接管后续各步的 ID 6 目标
+        # 夹爪接触位置；闭合后接管后续各步的 ID 6 目标。
+        # --resume lift/place 时闭爪（和抬升）已在 server 侧做完，接触位置由 --grip-hold 传进来。
+        hold: int | None = grip_hold if resume in ("lift", "place") else None
         for item in steps:
             name = item["name"]
             if name in skip_steps:
@@ -524,12 +536,31 @@ def run_plan(plan: dict, uio: str, six_cli: str, single_cli: str, loops: int,
                       "reason=direct_to_grasp_pose")
                 continue
             targets = step_targets(item, hold)
+            resume_skip = resume is not None and name in ("standby", "approach", "grasp")
+            if resume_skip and name != "grasp":
+                print(f"G3_STEP name={name} result=SKIPPED elapsed_ms=0 "
+                      f"reason=resume_{resume}")
+                continue
+            if resume in ("lift", "place") and name == "grasp":
+                # 闭爪已经由 server 直接调 C 单轴命令做完（省掉 880 ms 的 Python 启动），
+                # 这里连夹爪动作也不再执行，直接从 lift（或 place）起。
+                print(f"G3_STEP name={name} result=SKIPPED elapsed_ms=0 reason=resume_{resume}")
+                continue
+            if resume == "place" and name == "lift":
+                # 抬升也已由 server 直接发六轴命令做完：这是"取消咬合后空档"的关键一刀，
+                # 否则臂要被传送带拽着对抗 1.8 s。
+                print(f"G3_STEP name={name} result=SKIPPED elapsed_ms=0 reason=resume_place")
+                continue
             step_start = time.monotonic()
+            if resume_skip:
+                # 臂已在拦截位（上一条 dynamic_stage 走到的）：不动，直接进夹爪闭合。
+                # 动一下就会把"提前量"算进去的时间又还给舵机，动态拦截就没有意义了。
+                ok, out = True, "RESUME_AT_GRASP no_motion"
             # lift 走普通六轴联动，不拆两段（10-24 定案）：
             # 单轴 ID2 会越过竖直点(~1990)死区而静默停（实测 no_motion_ack），
             # 只有六轴联动让 ID2/ID3 一起动才穿得过；而"先 ID2 到底再 ID3"的两段式
             # 正是"ID3 猛然下降"观感的来源。六轴联动两者都解决。
-            if name == "place":
+            elif name == "place":
                 ok, out = run_place(uio, item, six_cli, single_cli, targets,
                                     observe_ms, hold, dry_run)
             else:
@@ -537,10 +568,37 @@ def run_plan(plan: dict, uio: str, six_cli: str, single_cli: str, loops: int,
                                    observe_ms, hold, transit, dry_run)
             took = int((time.monotonic() - step_start) * 1000)
             if ok:
-                print(f"G3_STEP name={name} result=OK elapsed_ms={took}"
-                      + (f" gripper_hold={hold}" if hold is not None else ""))
-                if dry_run and out.strip():
-                    print("  " + out.strip())
+                if resume_skip:
+                    # grasp 步在 --resume close 下没有运动，只走它的夹爪闭合；
+                    # 报 SKIPPED 而不是 OK，否则日志会让人以为臂动过。
+                    print(f"G3_STEP name={name} result=SKIPPED elapsed_ms=0 "
+                          f"reason=resume_{resume}")
+                else:
+                    print(f"G3_STEP name={name} result=OK elapsed_ms={took}"
+                          + (f" gripper_hold={hold}" if hold is not None else ""))
+                    if dry_run and out.strip():
+                        print("  " + out.strip())
+                if stop_after and name == stop_after:
+                    # 到了拦截位就停：**夹爪保持张开**，不执行该步的 close。
+                    # 后面闭爪由外部（视觉触发）单独下发，本进程到此结束。
+                    # hold 可能是 None（还没夹过），用局部变量而不是在 f-string 里写
+                    # 三元表达式：双引号 f-string 的花括号里再写一对双引号，是 Python
+                    # 3.12 才允许的语法（PEP 701）。板端 PetaLinux 是 3.10/3.11，
+                    # 会直接 SyntaxError 整个文件，表现是"runner 231 ms 退出、
+                    # 一行 G3_ 输出都没有"（2026-10-29 实际踩到）。
+                    # 检查：python3 scripts/check_py_compat.py scripts/*.py
+                    hold_text = "none" if hold is None else hold
+                    print(f"G5_READY_AT step={name} targets={targets} "
+                          f"gripper_open={targets[GRIPPER_AXIS - 1]} "
+                          f"hold={hold_text} "
+                          f"mono_ms={time.monotonic() * 1000.0:.1f}")
+                    print(f"G3_CYCLE end={cycle} success=1 grip=open "
+                          f"stopped_after={name}")
+                    print(f"G3_CYCLE timing elapsed_ms="
+                          f"{int((time.monotonic() - cycle_start) * 1000)}")
+                    print(f"G3_RUN_SUMMARY cycles={cycle} failures={failures} "
+                          f"aborted=0 stopped_after={name}")
+                    return failures
             else:
                 print(f"G3_STEP name={name} result=FAIL fault={fault_line(out)}")
                 ok_cycle = False
@@ -640,12 +698,32 @@ def main(argv=None) -> int:
                              "keep=照旧先到静态 standby；skip=强制跳过")
     parser.add_argument("--teaching-table", type=Path,
                         help="--grasp-xy 需要的示教点表（见 grasp_point_map.py）")
+    parser.add_argument("--stop-after", choices=("grasp",), default=None,
+                        help="在该步六轴到位之后、夹爪动作之前收尾退出，夹爪保持张开。"
+                             "动态拦截的'提前就位'用：臂先守在拦截点，闭爪由外部触发单独下发。"
+                             "当前只支持 grasp（grasp 步的夹爪动作是 close，必须跳过）")
+    parser.add_argument("--resume", choices=("close", "lift", "place"), default=None,
+                        help="从该动作接着跑：close=臂已在拦截位，跳过 standby/approach/grasp "
+                             "的移动，直接闭爪，然后 lift/place/retreat/exit；"
+                             "lift=连闭爪也跳过（闭爪已由 server 直接调 C 单轴命令做完）；"
+                             "place=连 lift 也跳过（lift 也已由 server 直接发六轴命令做完）。"
+                             "lift/place 都要给 --grip-hold")
+    parser.add_argument("--grip-hold", type=int, default=None,
+                        help="--resume lift/place 时夹爪的保持位置（fast-close 读到的接触位置）")
+    parser.add_argument("--grasp-id2-offset", type=int, default=0,
+                        help="给 approach/grasp 的 ID2 目标加一个偏移（现场指定，不是推算）。"
+                             "负值=把夹取点抬高一点，让上夹臂合拢时把方块掀起一角，"
+                             "减少与传送带的接触面（动态抓取时的摩擦对抗用）")
     args = parser.parse_args(argv)
 
     if args.loop is not None and args.loop < 1:
         parser.error("--loop N 必须 >= 1")
     if args.grasp_xy is not None and args.teaching_table is None:
         parser.error("--grasp-xy 需要 --teaching-table")
+    if args.stop_after is not None and args.resume is not None:
+        parser.error("--stop-after 与 --resume 不能同时给：前者收尾、后者接着跑，语义互斥")
+    if args.resume in ("lift", "place") and args.grip_hold is None:
+        parser.error("--resume lift/place 需要 --grip-hold（夹爪的接触位置，来自 fast-close 的读数）")
     if args.teaching_table is not None and args.grasp_xy is None:
         parser.error("--teaching-table 只在 --grasp-xy 时使用")
     if args.observe_ms < 1000 or args.observe_ms > 10000 or args.observe_ms % 100:
@@ -658,6 +736,14 @@ def main(argv=None) -> int:
         if args.grasp_xy is not None:
             apply_grasp_point(plan, args.grasp_xy[0], args.grasp_xy[1],
                               args.teaching_table)
+        if args.grasp_id2_offset:
+            # 现场指定的偏移（不是推算）：负值把夹取点抬高一点，上夹臂合拢时方块被掀起
+            # 一角、与传送带的接触面变小，动态抓取时那 0.5~1 s 的摩擦对抗会明显减弱。
+            for item in plan["steps"]:
+                if item["name"] in GRASP_STEPS:
+                    item["target_count"][1] += args.grasp_id2_offset
+            print("G3_INFO grasp ID2 offset %+d（现场指定）：approach/grasp ID2 已调整"
+                  % args.grasp_id2_offset)
     except (OSError, json.JSONDecodeError, ValueError) as error:
         print(f"G3_PLAN_REJECTED {error}", file=sys.stderr)
         return 1
@@ -673,7 +759,8 @@ def main(argv=None) -> int:
         print("G3_WARN verify the sweep visually on the first run: reset pose -> grasp pose "
               "is a single six-axis interpolation", file=sys.stderr)
     failures = run_plan(plan, args.uio, args.six_cli, args.single_cli, loops,
-                        args.observe_ms, args.transit, args.dry_run, skip_steps)
+                        args.observe_ms, args.transit, args.dry_run, skip_steps,
+                        args.stop_after, args.resume, args.grip_hold)
     return 0 if failures == 0 else 2
 
 

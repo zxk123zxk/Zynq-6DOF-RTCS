@@ -1,6 +1,6 @@
 # Zynq-6DOF-RTCS
 
-AX7020（XC7Z020）PS/PL 六轴 HX-30HM 总线舵机控制工程。源码、XSA、bitstream 和仓库 SD 三件套为 ABI **0x5254000E**。2026-10-13 仓库镜像已更新 ID 6 限位为 2050–3000；**2026-10-14 板端 `limits` 实测读回 2050–3000，新版镜像已在位**（同一 ABI 不能区分两版限位，仍须逐轴 `limits` 核对）。**ID 1–5 为关节，ID 6 为夹爪**；**ID 5 的旧窄内部角度窗口已由官方软件重新校准并实测通过**。相机为**中奥维柯 3 mm / 90° 无畸变 UVC + CPL 偏振片**（2026-10-17 替换原幻尔 120° 广角，实测 1280×720，无深度）。版本与哈希见[操作说明](docs/SD启动与项目迭代操作说明.md)。
+AX7020（XC7Z020）PS/PL 六轴 HX-30HM 总线舵机控制工程。源码、XSA、bitstream 和仓库 SD 三件套为 ABI **0x5254000E**。2026-10-13 仓库镜像已更新 ID 6 限位为 2050–3000；**2026-10-14 板端 `limits` 实测读回 2050–3000，新版镜像已在位**（同一 ABI 不能区分两版限位，仍须逐轴 `limits` 核对）。**ID 1–5 为关节，ID 6 为夹爪**；**ID 5 的旧窄内部角度窗口已由官方软件重新校准并实测通过**。相机为**中奥维柯 3 mm / 90° 无畸变 UVC + CPL 偏振片**（2026-10-17 替换原幻尔 120° 广角，实测 1280×720，无深度）。版本与哈希见 [artifacts/sd/SHA256SUMS](artifacts/sd/SHA256SUMS)，载荷拷板步骤见 [半自动闭环 §5.1](docs/9.半自动闭环（static capture）.md)。
 
 > **流程约定：本仓库采用[双轨制](docs/0.1hardware_bringup.md)。** 竞赛轨只保留红线门禁（独立供电、物理禁发、PL 限位/速度/截止时间、独立硬件急停、实测标定、单帧提交、不自动重试），**任何流程性门禁不得阻塞竞赛轨的运动路径**；证据归档、逐步操作者确认、100 次循环与 P99 统计属归档轨，在周末补齐。冲刺日程与每日任务卡见 [docs/7.sprint-plan-daily-tasks.md](docs/7.sprint-plan-daily-tasks.md)。
 
@@ -25,7 +25,7 @@ ABI 13 起在运动故障时保存舵机 ERROR 原始字节及 ID（ABI 0E 保�
 
     bash sim/run_regression_wsl.sh
 
-新镜像上板后先在物理禁发状态运行 probe 和 limits；装上 J20-36/W15 到 J20-38/GND 的允许跳线后可只读 diagnose 与 torque-status。**2026-10-12 的六轴基线（`limits` + `diagnose` + `torque-status`）已全绿**，原始输出见 [G2 板端基线](docs/2.G2-six-axis-calibration.md)。注意上电后 `0x28=0`（卸力），不下扭矩开关舵机不会动。六轴目标只能根据当次 diagnose 与实测机械空间显式填写。stop 与独立断电急停的操作顺序见 [SD 操作说明](docs/SD启动与项目迭代操作说明.md)。板端运动不由构建脚本执行。
+新镜像上板后先在物理禁发状态运行 probe 和 limits；装上 J20-36/W15 到 J20-38/GND 的允许跳线后可只读 diagnose 与 torque-status。**2026-10-12 的六轴基线（`limits` + `diagnose` + `torque-status`）已全绿**，原始输出见 [G2 板端基线](docs/2.G2-six-axis-calibration.md)。注意上电后 `0x28=0`（卸力），不下扭矩开关舵机不会动。六轴目标只能根据当次 diagnose 与实测机械空间显式填写。stop 与独立断电急停的操作顺序见 [独立断电急停](evidence/independent_estop.md) 与 [软件停止](evidence/software_stop.md)。板端运动不由构建脚本执行。
 
 ## 核心目录
 
@@ -38,7 +38,7 @@ ABI 13 起在运动故障时保存舵机 ERROR 原始字节及 ID（ABI 0E 保�
 | [sim/](sim/README.md) | RTL、CLI mock、完整离线回归 |
 | [scripts/](scripts/build_vivado.ps1) | Vivado、XSA 导入和 PetaLinux SD 构建 |
 | [artifacts/hw/](artifacts/hw/rtcs_system.xsa) 与 [artifacts/sd/](artifacts/sd/SHA256SUMS) | ABI 0E XSA、bitstream、SD 三件套及哈希；旧 ABI 见归档 |
-| [docs/](docs/0.1hardware_bringup.md) | 阶段 G0–G6、双轨制门禁、冲刺日程与每日任务卡；**报告分工见 [8.报告分工与素材清单](docs/8.报告分工与素材清单.md)**，半自动闭环见 [9.static capture](docs/9.半自动闭环（static capture）.md)，**FPGA 作用与赛道符合性见 [10](docs/10-FPGA在项目中的作用与赛道符合性.md)**，最新进度见 [10.26 归档](docs/10.26-归档与10.27任务.md) |
+| [docs/](docs/0.1hardware_bringup.md) | 阶段 G0–G6、双轨制门禁、冲刺日程与每日任务卡；**报告分工见 [8.报告分工与素材清单](docs/8.报告分工与素材清单.md)**，半自动闭环见 [9.static capture](docs/9.半自动闭环（static capture）.md)，**FPGA 作用与赛道符合性见 [10](docs/10-FPGA在项目中的作用与赛道符合性.md)**，动态抓取见 [11.评估与启动提示词](docs/11-动态抓取可行性评估与启动提示词.md)，最新进度见 [10.26 归档](docs/10.26-归档与10.27任务.md) |
 | [evidence/](evidence/g3-static-openloop-20261025.md) | 成功率、时序、锚点一致性的逐次原始记录（指标表配证据用） |
 | [artifacts/reports/](artifacts/reports/competition-plan-material-assessment-20261012.md) | 竞赛计划与素材评估、交接提示词 |
 | [artifacts/archive/](artifacts/archive/) | 旧 ABI 的 bit/XSA/SD 快照与操作记录；被取代的旧说明文档已清理，需要时从 git 历史取回 |

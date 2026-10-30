@@ -1,0 +1,725 @@
+% !TeX program = xelatex
+% =============================================================================
+%  2026 全国大学生嵌入式芯片与系统设计竞赛 · AMD 赛道 3.3 自主选题
+%  技术文档（严格按官方《技术文档模板》五部分结构）
+%  编译：xelatex report-1031.tex  跑两遍（第二遍生成目录/交叉引用）
+%  依赖：TeX Live / MiKTeX + ctex（中文字体用 Windows 自带宋体/黑体）
+%
+%  三类占位符（提交前全文搜索“待填/待补/二选一”清空）：
+%    \TODO{...} 红色 = 必须由人填的客观事实（型号、照片、队友章节）
+%    \TBD{...}  橙框 = 取决于最终交静态版还是动态版，二者择一
+%    \PHOTO{...} 灰框 = 待补实物照片 / 界面截图
+% =============================================================================
+\documentclass[UTF8,a4paper,zihao=5,fontset=windows]{ctexart}
+
+\usepackage[a4paper,left=2.5cm,right=2.5cm,top=2.4cm,bottom=2.2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{fancyhdr}
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usepackage[hidelinks]{hyperref}
+
+% ---------- 颜色 ----------
+\definecolor{todoc}{RGB}{200,30,30}
+\definecolor{tbdc}{RGB}{185,100,0}
+\definecolor{tbdbg}{RGB}{255,246,232}
+\definecolor{photoc}{RGB}{120,120,120}
+\definecolor{photobg}{RGB}{246,246,246}
+\definecolor{bluec}{RGB}{30,70,140}
+
+\captionsetup{font=small,labelsep=quad}
+\setlist{nosep,leftmargin=2.2em}
+\setlength{\emergencystretch}{3em}
+\renewcommand{\arraystretch}{1.15}
+
+% ---------- 三类占位符 ----------
+\newcommand{\TODO}[1]{{\color{todoc}\textbf{[待填：#1]}}}
+\newcommand{\TBD}[1]{%
+  \begin{center}\setlength{\fboxsep}{6pt}%
+  \colorbox{tbdbg}{\parbox{0.94\linewidth}{\color{tbdc}\small\textbf{[静态/动态 二选一]}\ #1}}%
+  \end{center}}
+\newcommand{\PHOTO}[1]{%
+  \begin{center}\setlength{\fboxsep}{12pt}%
+  \fcolorbox{photoc}{photobg}{\parbox[c][2.3cm][c]{0.86\linewidth}{\centering\color{photoc}\small #1}}%
+  \end{center}}
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\figph}[1]{\PHOTO{#1}}
+
+\lstset{basicstyle=\ttfamily\scriptsize,breaklines=true,frame=single,
+        columns=fullflexible,keepspaces=true,showstringspaces=false}
+
+% 章节号：一级显示“第一部分”，二级仍用 1.1 形式（与官方模板一致）
+\renewcommand{\thesection}{第\chinese{section}部分}
+\renewcommand{\thesubsection}{\arabic{section}.\arabic{subsection}}
+\renewcommand{\thesubsubsection}{\arabic{section}.\arabic{subsection}.\arabic{subsubsection}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\small Zynq 六轴机械臂视觉引导抓取系统}
+\fancyhead[R]{\small 技术文档}
+\fancyfoot[C]{\small \thepage}
+
+% =============================================================================
+\begin{document}
+
+% ---------------------------- 作品名称 ---------------------------------------
+\begin{center}
+  {\zihao{2}\bfseries Zynq 六轴机械臂视觉引导抓取系统}\\[8pt]
+  {\large\color{bluec} ——面向柔性上料工位的单目视觉定位与六轴实时执行}\\[12pt]
+  {\small 参赛编号：\TODO{编号}\quad 赛道：AMD 3.3 自主选题\quad
+   组别：\TODO{初级组 / 高级组}\quad 2026 年 10 月 31 日}
+\end{center}
+
+% =============================================================================
+\section*{摘\quad 要}
+\addcontentsline{toc}{section}{摘要}
+
+本文设计并实现了一套面向柔性上料工位的六轴机械臂视觉引导抓取系统。系统以上位机承担
+图像理解与抓取点决策，以 Zynq-7020（ALINX AX7Z020）承担六轴舵机总线的实时控制与安全
+校验，二者经 USB-UART 串行链路协同，完成“识别—定位—抓取—搬运—放置”的完整物理任务。
+
+系统不依赖深度相机、不做棋盘格内参标定，而用传送带平面的四点单应把像素直接映射为毫米
+坐标，并以“多帧极差 $\leq$2\,mm 且持续 $\geq$0.5\,s”作为出点条件，把检测抖动挡在决策
+之前；机械臂侧不写解析逆运动学，而以现场实测的六点示教表分段线性插值得到关节目标，
+在 295--420\,mm 区间内对任意位置可用。实时控制由 FPGA 逻辑直接实现 HX-30HM 单线半双工
+总线协议：组帧、校验、换向时序、六轴同帧广播、逐轴限位、截止时间校验与故障锁存全部在
+PL 内完成，PS 只下发目标值，使控制时序不受操作系统调度影响。
+
+实测结果：静态抓取闭环 13/13，覆盖 300--403\,mm；单轮端到端周期中位数 7.84\,s；
+同一物理点多次定位极差 $\pm$0.15\,mm；夹持状态可由舵机堵转位置自动判别（夹住
+2373--2409，夹空 2214），不依赖额外传感器；PL 资源占用 LUT 12.69\%、FF 10.84\%，
+100\,MHz 主时钟下时序约束全部满足。
+
+\TBD{摘要结尾是否加动态成绩。\textbf{静态版}：不加，保持“静态抓取 13/13”。
+\textbf{动态版}：改为“并在传送带 XX\,mm/s 匀速运行时完成动态拦截 X/5，
+端到端提前量误差 XX\,mm”。}
+
+\vspace{3pt}
+\noindent\textbf{关键词}：Zynq-7020；六轴机械臂；视觉引导抓取；平面单应；实时总线控制
+
+% =============================================================================
+\section{作品概述}
+
+\subsection{功能与特性}
+
+本作品是一套可独立作业的视觉引导抓取单元：操作者把工件随意放置于传送带面上，系统自动
+完成定位、抓取、搬运与放置，全过程无人工输入坐标。
+
+（1）\textbf{单目视觉定位}：仅用一个 1280$\times$720 免驱摄像头，把带面上任意位置的工件
+中心换算为毫米坐标，重复性优于 0.2\,mm，无需龙门、无需深度信息。
+
+（2）\textbf{自动抓取搬运}：收到坐标后自动走完 standby$\rightarrow$approach$\rightarrow$
+grasp$\rightarrow$lift$\rightarrow$place$\rightarrow$retreat$\rightarrow$exit 七步，
+一次触发完成一个来回，抓取、抬升、横摆、下放、撤离五段均无碰撞。
+
+（3）\textbf{夹持自判}：闭合后读回舵机位置，堵转停在 2373--2409 判为夹住、合到底停在
+2214 判为夹空，无需加装力/位传感器。
+
+（4）\textbf{故障不锁死}：把舵机故障分为可屏蔽（过载，夹持期必需）与不可屏蔽（通讯、
+限位）两类，前者可按轴屏蔽、后者照常上报；全系统不设中止任务的硬门禁，异常只告警。
+
+（5）\textbf{单线总线扩展}：六个舵机共用一根半双工信号线，由 PL 完成换向与仲裁，
+增加关节只需并联接线。
+
+\TBD{是否声明“运动中抓取”。\textbf{静态版}：删去本框，全文只描述“工件静止时抓取”。
+\textbf{动态版}：增写“（6）运动工件拦截——传送带以可调速度运行时，依据检测时刻与飞行
+时间预算在固定拦截点闭合夹爪，验收 $\geq$3/5”。}
+
+\subsection{应用领域}
+
+本作品的形态对应一类典型工位：\textbf{散乱来料的柔性上料}。在 3C 装配、注塑取件、
+物流分拣、教学与竞赛平台等场景中，工件常以无序姿态出现在传送带或料台上；传统做法是加
+振动盘、定位工装或专用送料机构，成本与换型代价都高。本作品用一台相机加一套抓取程序
+替代这些专用机构，换型只需重摆示教点，不必更换机械件。
+
+可对应的具体场景包括：小件分拣与码放、注塑机取件后的定置摆放、检测工位上下料，
+以及作为教学平台演示“视觉—决策—执行”的完整闭环。
+
+\TBD{应用场景的表述取决于最终交哪一档，这是\textbf{必须二选一}的一处。
+\textbf{静态版（工件静止）}：聚焦“料台/料框内的静态取件”，可写“适用于来料已停稳的
+上料工位，如料框取件、检测台上料”。\\
+\textbf{动态版（带速运行）}：可扩展到“连续物流分拣、流水线在线抓取”，但须同时给出
+带速上限与拦截点距离的约束关系，否则按空话处理。\\
+两版共用的部分已写在上方，只需替换本框。}
+
+\subsection{主要技术特点}
+
+（1）\textbf{不标定内参，只标定平面}。棋盘格路线在本工位反复失败（角点不稳、重投影
+误差大），改为在带面四角取点求单应矩阵，把镜头残余畸变一并吸收进映射；代价是映射只在
+带面平面内有效，而这正是抓取面。
+
+（2）\textbf{不写逆运动学，用实测示教表}。解析 IK 需标定量杆长度、零点与耦合，工期与
+风险都高；改用六组现场 \code{diagnose} 实测的关节值做分段线性插值，误差上限由示教
+重复性（$\pm$10\,mm 量级）决定，可测可控。
+
+（3）\textbf{出点前先判稳定}。抓取点不是单帧读数，而是连续多帧极差 $\leq$2\,mm 且跨度
+$\geq$0.5\,s 之后的中位数；6 组单测确认门槛真实生效（跨 0.4\,s 不判、抖动 5\,mm 不判、
+抖动后稳定判）。
+
+（4）\textbf{时序下沉到 PL}。总线换向、组帧、校验、六轴同帧广播、逐轴限位与截止时间
+判定都在硬件里完成，100\,MHz 单周期粒度，不经过 Linux 调度。
+
+\subsection{主要性能指标}
+
+静态抓取闭环 13/13（覆盖 300--403\,mm），单轮周期中位数 7.84\,s，定位重复性
+$\pm$0.15\,mm；PL 占 LUT 12.69\%、FF 10.84\%，100\,MHz 时序全满足。详见表~\ref{tab:perf}。
+
+\begin{table}[H]\centering\small
+\caption{主要性能指标}
+\label{tab:perf}
+\begin{tabularx}{\linewidth}{@{}p{3.2cm}p{3.4cm}X@{}}
+\toprule
+指标 & 数值 & 测量条件 / 备注 \\
+\midrule
+静态抓取成功率 & \textbf{13/13} & 40\,mm 方块随机摆放，$y$ 限 36$\pm$5\,mm，分母含失败 \\
+可抓取区间 & 295--420\,mm & 六点示教表覆盖范围，区间外不外推 \\
+单轮端到端周期 & P50 \textbf{7.84}\,s & 收到坐标$\rightarrow$exit 到位，含视觉与串口 \\
+定位重复性 & $\pm$0.15\,mm & 同一物理点三次读数极差 \\
+定位绝对偏差 & 1.1\,mm & 对 10-24 锚点标称值 \\
+夹持判据 & 2373--2409 / 2214 & 夹住堵转位 / 夹空合到底，相差 $>$150 count \\
+PL 资源占用 & LUT 12.69\%、FF 10.84\% & XC7Z020，Vivado 2023.2 impl 后 \\
+主时钟与时序 & 100\,MHz，全约束满足 & \code{clk\_fpga\_0}，无违约端点 \\
+动态拦截成功率 & {\color{tbdc}\textbf{[二选一]}}\ 静态版填“不在本次范围”；动态版填 X/5 & 带速 XX\,mm/s，须注明 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{主要创新点}
+
+（1）\textbf{以平面单应替代相机内参标定}，并在同一映射上叠加“多帧稳定判据”，
+让精度与鲁棒性同时可测。
+
+（2）\textbf{以现场实测示教表替代解析逆运动学}，把不可控的标定误差换成可测的示教
+重复性，并给出其量化上界。
+
+（3）\textbf{用舵机堵转位置判别夹持状态}，不加传感器即区分“夹住/夹空”，消除
+“七步全绿却没夹到东西”的假成功。
+
+（4）\textbf{把故障分级为可屏蔽/不可屏蔽}，夹持期可屏蔽过载而通讯故障照常上报，
+既不误停也不掩盖真故障。
+
+\subsection{设计流程}
+
+需求分析（工件尺寸、抓取区间、节拍）$\rightarrow$ 平台选型（Zynq-7020 + 总线舵机）
+$\rightarrow$ 驱动器与 PL 逻辑打通 $\rightarrow$ 平面标定与检测链路 $\rightarrow$
+七步状态机与示教表 $\rightarrow$ 视觉闭环联调 $\rightarrow$ 指标实测与证据归档，
+见图~\ref{fig:flow}。
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[
+  node distance=3.2mm,
+  box/.style={draw,rounded corners=2pt,fill=blue!6,align=center,inner sep=3pt,
+              font=\scriptsize,minimum height=8mm,text width=20mm},
+  ar/.style={-{Latex[length=1.6mm]},draw=bluec,thick}]
+\node[box] (a) {需求分析\\尺寸/区间/节拍};
+\node[box,right=of a] (b) {平台选型\\Zynq-7020\\总线舵机};
+\node[box,right=of b] (c) {PL 逻辑\\协议/限位\\deadline};
+\node[box,right=of c] (d) {平面标定\\四点单应\\检测链路};
+\node[box,right=of d] (e) {七步状态机\\六点示教表\\夹持判据};
+\node[box,below=8mm of d] (f) {视觉闭环联调\\串口直传坐标};
+\node[box,left=of f] (g) {指标实测\\成功率/周期\\精度};
+\node[box,left=of g] (h) {证据归档\\日志/录像\\指标表};
+\draw[ar] (a)--(b); \draw[ar] (b)--(c); \draw[ar] (c)--(d);
+\draw[ar] (d)--(e); \draw[ar] (e.south) |- (f.east);
+\draw[ar] (f)--(g); \draw[ar] (g)--(h);
+\end{tikzpicture}
+\caption{设计流程}
+\label{fig:flow}
+\end{figure}
+
+% =============================================================================
+\section{系统组成及功能说明}
+
+\subsection{整体介绍}
+
+系统由四层构成：\textbf{感知层}（相机 + 上位机视觉程序）、\textbf{决策层}（上位机抓取点
+决策与任务下发）、\textbf{编排层}（板端 PS 的坐标$\rightarrow$关节映射与七步状态机）、
+\textbf{执行层}（PL 的总线时序逻辑 + 六个总线舵机）。四层的物理边界与数据流见
+图~\ref{fig:arch}。
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[
+  node distance=3mm,
+  blk/.style={draw,rounded corners=3pt,inner sep=4pt,align=center,font=\scriptsize},
+  pc/.style={blk,fill=blue!8,draw=bluec},
+  ps/.style={blk,fill=orange!12,draw=orange!65!black},
+  pl/.style={blk,fill=green!8,draw=green!45!black},
+  dev/.style={blk,fill=gray!8,draw=gray!60},
+  ar/.style={-{Latex[length=1.8mm]},thick,draw=black!70}]
+
+\node[pc] (cam) {USB 相机\\1280$\times$720};
+\node[dev,left=6mm of cam,text width=17mm] (belt) {传送带\\490$\times$80\,mm\\（工件面）};
+\draw[ar,dashed] (belt)--(cam);
+\node[pc,right=5mm of cam] (yolo) {YOLO11n\\中心像素};
+\node[pc,right=5mm of yolo] (hom) {平面单应\\$\rightarrow$毫米};
+\node[pc,right=5mm of hom] (stab) {稳定判据\\$\geq$0.5\,s};
+\draw[ar] (cam)--(yolo); \draw[ar] (yolo)--(hom); \draw[ar] (hom)--(stab);
+\node[draw=bluec,dashed,rounded corners=4pt,fit=(cam)(yolo)(hom)(stab),
+      label={[font=\scriptsize\bfseries,bluec]above:上位机（感知与决策）}] (boxpc) {};
+
+\node[dev,below=11mm of hom,text width=36mm] (uart)
+  {USB-UART 115200\\单行 JSON（约 200 字节）};
+\draw[ar] (stab.south) |- (uart.east);
+
+\node[ps,below=11mm of uart,text width=46mm] (psblk)
+  {PS（ARM Linux）\\示教表插值 + 七步状态机\\夹持判定 + 故障恢复};
+\draw[ar] (uart)--(psblk);
+
+\node[pl,below=10mm of psblk,text width=64mm] (plblk)
+  {PL（FPGA 逻辑，100\,MHz）\\AXI 寄存器 $\rightarrow$ 六轴同步组帧 $\rightarrow$
+   逐轴限位 / deadline $\rightarrow$ 半双工总线主控};
+\draw[ar] (psblk)--(plblk) node[midway,right,font=\tiny]{AXI4-Lite};
+
+\node[dev,below=9mm of plblk,text width=66mm] (servo)
+  {6$\times$ HX-30HM 总线舵机（单线半双工）\quad ID1--5 关节 \quad ID6 夹爪};
+\draw[ar] (plblk)--(servo);
+\end{tikzpicture}
+\caption{系统整体框图：上位机（蓝）负责感知与决策，PS（橙）负责映射与编排，
+PL（绿）负责时序与校验，灰色为外设}
+\label{fig:arch}
+\end{figure}
+
+各模块之间的关系可概括为“\textbf{两个数下行、一个结论上行}”：上位机只向板端下发一对
+毫米坐标，板端只向上位机回报一次抓取结论（成功/夹空 + 接触位置 + 周期），其余状态全部
+在板内闭环。这样设计的理由是：坐标是唯一需要“看”的量，结论是唯一需要“留痕”的量，
+其余若都跨链路传递，只增加抖动而不增加信息。
+
+\subsection{硬件系统介绍}
+
+\subsubsection{硬件整体介绍}
+
+主控为 ALINX AX7Z020（Xilinx Zynq-7020，XC7Z020），PS 为双核 Cortex-A9 + 1\,GiB DDR3，
+PL 为 85K 逻辑单元。板卡通过 AXI4-Lite 寄存器组对外暴露一个版本化的软硬件接口
+（ABI \code{0x5254000E}），PS 侧命令行与 PL 逻辑按该 ABI 解耦，便于两侧独立升级。
+
+执行器为 6 个 HX-30HM 总线舵机（ID1--5 为关节，ID6 为夹爪），共用一根半双工信号线。
+选总线舵机而非 PWM 舵机的原因是：总线舵机能回报位置与故障码，这是“夹持自判”与
+“故障分级”两项机制的物理基础；若用 PWM 舵机，必须加装额外传感器才能判断是否夹住。
+
+视觉侧为一个 1280$\times$720 免驱 UVC 相机，加一片 CPL 偏振片抑制皮带镜面高光。
+上位机与板卡之间用 USB-UART（115200\,8N1）连接，该链路同时是板卡控制台，
+因此软件上做了“一条链路两种用途”的分时复用。
+
+PL 侧资源与时序（Vivado 2023.2，impl 后）：LUT 6\,751（12.69\%）、FF 11\,537
+（10.84\%）、BRAM 0、DSP 2（0.91\%），主时钟 \code{clk\_fpga\_0} 100\,MHz，
+“All user specified timing constraints are met”。资源占用低是正常的——本设计是控制
+路径不是数据通路，PL 的职责是时序精确而非吞吐。
+
+\subsubsection{机械设计介绍}
+
+\TODO{队友 B 负责。模板要求“从总体到局部，逐级给出各组件的具体设计图，可以是 CAD 截图
+或手绘图片”。建议至少三张：① 整机三视图或 CAD 总装截图；② 夹爪与腕部局部（含爪内宽与
+工件尺寸的余量标注——这个数对动态抓取很关键）；③ 底座与传送带的相对位置（示教点在该
+坐标系下定义）。}
+
+\TBD{若最终交动态版，机械部分必须补一条：\textbf{传送带挡边或导轨}的照片与尺寸。
+动态抓取最脆的环节是 $y$ 向漂移，加挡边是成本最低的治理手段，也是“工况可控”的证据。}
+
+\subsubsection{电路各模块介绍}
+
+本作品电路以板卡与成品舵机为主，自制部分为总线接线与供电分配：六个舵机并联在同一对
+电源与同一根信号线上，电源与板卡共地，信号线经电平匹配接入 PL 的 IO。关键信号只有三根：
+\code{BUS\_TX}（PL 输出）、\code{BUS\_RX}（PL 输入）、\code{BUS\_DIR}（换向控制），
+换向时序由 PL 保证，不在软件里做。
+
+\PHOTO{待补：① 总线接线与供电分配的照片或手绘接线图（标注电源、地、信号三根线）；
+② 若自制了转接板，给出 SCH 原理图与 PCB 版图截图，并标出 \code{BUS\_TX/RX/DIR} 与
+舵机接口的关键输入输出。模板要求“标记出关键的输入、输出信号线”。}
+
+\subsection{软件系统介绍}
+
+\subsubsection{软件整体介绍}
+
+软件分三层，划分依据是“\textbf{变更频率}”而非“算力”：需要反复试错的（检测阈值、
+插值表、状态机）放在上位机与 PS，便于改一行就重跑；必须按纳秒对齐的（总线换向、六轴
+同帧广播）放在 PL，不受操作系统调度影响。
+
+\begin{table}[H]\centering\small
+\caption{三层职责划分与关键实现}
+\begin{tabularx}{\linewidth}{@{}p{1.5cm}p{2.4cm}Xp{4.0cm}@{}}
+\toprule
+层 & 载体 & 职责 & 关键实现 \\
+\midrule
+决策层 & 上位机 & 取帧、检测、平面映射、稳定判据、下发坐标、留存证据 & \code{capture\_agent.py}、\code{grasp\_point.py} \\
+编排层 & PS（ARM Linux） & 坐标$\rightarrow$六轴目标（示教表插值）、七步状态机、夹持判定、故障恢复 & \code{grasp\_point\_map.py}、\code{g3\_station\_runner.py} \\
+执行层 & PL（FPGA 逻辑） & 总线协议时序、六轴同步组帧、逐轴限位、deadline、故障锁存 & \code{src/pl/rtl/*.sv} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+端到端的时间预算（实测，单轮 7.5--9.4\,s）见表~\ref{tab:timing}。
+
+\begin{table}[H]\centering\small
+\caption{单轮七步的分段耗时（13 次闭环实测）}
+\label{tab:timing}
+\begin{tabularx}{\linewidth}{@{}p{2.5cm}p{3.1cm}X@{}}
+\toprule
+阶段 & 典型耗时 & 说明 \\
+\midrule
+视觉出点 & 约 1.7\,s & 含预热丢弃帧与 0.5\,s 稳定窗，共 6--7 帧 \\
+串口下发 + 校验 & $<$20\,ms & 单行约 200 字节，115200\,8N1 \\
+approach & 0.88--4.21\,s & 首轮从复位位直接插值到抓取位，故偏长 \\
+grasp + 闭爪 & 0.17\,s + 1.22\,s & 闭爪堵转耗时固定约 1.2\,s \\
+lift & 0.83--0.99\,s & 六轴联动，ID1 锁定 \\
+place + 张爪 & 1.85--2.20 + 0.66\,s & 先单轴 ID1 横摆，再六轴下放 \\
+retreat + exit & 0.88\,s + 0.88\,s & 张爪后先垂直抬起再撤离 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{软件各模块介绍}
+
+\paragraph{（一）上位机：取点与稳定判据}
+
+主流程为：打开相机 $\rightarrow$ 丢弃预热帧 $\rightarrow$ 连续检测取中位数
+$\rightarrow$ 稳定判据 $\rightarrow$ 平面映射 $\rightarrow$ 下发。关键输入为图像帧与
+标定文件，关键输出为一对毫米坐标与一组证据字段（帧数、极差、置信度、带面重合度）。
+
+\textbf{稳定判据}是本模块的核心。设最近 $n$ 帧中心为 $c_1 \ldots c_n$，当且仅当
+$\max x - \min x \leq 2$\,mm、$\max y - \min y \leq 2$\,mm 且首末帧时间跨度
+$\geq 0.5$\,s 时，取中位数作为出点；否则继续采样直至超时。该判据经 6 组单测验证，
+其中两组是反例：跨 0.4\,s 不判（说明 0.5\,s 门槛真实生效）、抖动 5\,mm 不判
+（说明极差门槛有效）。
+
+\textbf{平面映射}采用四点单应：在带面四角取像素点，与 490\,mm$\times$80\,mm 的物理尺寸
+建立透视变换，像素经一次矩阵乘法得毫米坐标。标定由程序自动完成（HSV 绿掩膜 + 最小外接
+矩形找带四角），人工只需确认一次。选用单应而非内参标定的原因见 1.3 节。
+
+\textbf{误检治理}分三级：光学（CPL 偏振片 + 压曝光）、算法（只用带面四边形内的检测框，
+框外的夹爪误检点直接被排除）、判据（取最高置信度，并记录 top1 与 top2 的差距，差距过小
+则告警）。
+
+\paragraph{（二）PS：坐标到关节，以及七步状态机}
+
+\textbf{坐标$\rightarrow$关节}用六点五轴示教表分段线性插值，表中每点为 $(x,y)$ 与五个
+关节目标值，实测值见表~\ref{tab:teach}。
+
+\begin{table}[H]\centering\small
+\caption{六点示教表（$y=36$\,mm 单车道，单位：舵机 count）}
+\label{tab:teach}
+\begin{tabular}{@{}crrrrr@{}}
+\toprule
+$x$ / mm & ID1 & ID2 & ID3 & ID4 & ID5 \\
+\midrule
+295 & 1699 & 2109 & 2141 & 2923 & 1687 \\
+320 & 1806 & 2030 & 2226 & 2885 & 1706 \\
+345 & 1854 & 2010 & 2241 & 2942 & 1757 \\
+370 & 1937 & 1971 & 2296 & 2972 & 1845 \\
+395 & 2039 & 1965 & 2287 & 2932 & 1950 \\
+420 & 2185 & 1912 & 2369 & 2873 & 2107 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+插值只在区间内有效，区间外一律夹到最近端点而不外推——实测外推 25\,mm 即偏出工件半径，
+等于抓空。
+
+\textbf{七步状态机}的流程与出口条件见图~\ref{fig:steps}。其中三条约束是为解决碰撞问题
+而加的：\code{lift} 必须六轴联动（单轴驱动 ID2 越过竖直点会进入死区静默停）；离地之前
+不许横向移动（\code{lift} 锁定 ID1）；带件横摆必须保持高位（\code{place} 先单轴横摆再
+六轴下放）。此外 \code{lift}/\code{place} 期间 ID4/ID5 必须“跟手”，否则腕部自转会把
+工件拧掉。
+
+\begin{figure}[H]\centering
+\begin{tikzpicture}[
+  st/.style={draw,rounded corners=2pt,fill=blue!6,align=center,inner sep=2.4pt,
+             font=\scriptsize,minimum height=11mm,text width=17mm},
+  ar/.style={-{Latex[length=1.5mm]},draw=bluec}]
+% 第一行（左->右）
+\node[st] (s1) at (0,0)      {standby\\归循环位};
+\node[st] (s2) at (2.15,0)   {approach\\六轴插值};
+\node[st] (s3) at (4.30,0)   {grasp\\落到抓取位};
+\node[st] (s4) at (6.45,0)   {grasp.gripper\\闭合判夹持};
+\node[st] (s5) at (8.60,0)   {lift\\六轴联动\\ID1 锁定};
+% 第二行（右->左）
+\node[st] (s6) at (8.60,-2.1) {place\\先单轴横摆\\再六轴下放};
+\node[st] (s7) at (6.45,-2.1) {place.gripper\\张开};
+\node[st] (s8) at (4.30,-2.1) {retreat\\先垂直抬\\再横移};
+\node[st] (s9) at (2.15,-2.1) {exit\\回撤离位};
+\draw[ar] (s1)--(s2); \draw[ar] (s2)--(s3); \draw[ar] (s3)--(s4); \draw[ar] (s4)--(s5);
+\draw[ar] (s5)--(s6); \draw[ar] (s6)--(s7); \draw[ar] (s7)--(s8); \draw[ar] (s8)--(s9);
+\end{tikzpicture}
+\caption{七步状态机流程（grasp.gripper 与 place.gripper 为夹爪动作子步）}
+\label{fig:steps}
+\end{figure}
+
+\textbf{夹持判定}读舵机闭合并堵转后的位置：命令目标为 2200，实际停在 2373--2409
+说明夹住了工件（差 170+ count），停到 2214 说明合到底、没夹到东西，阈值取 60 count。
+这条判据让“七步全绿但没夹到东西”的假成功无法进入统计。
+
+\paragraph{（三）PL：总线时序与安全校验}
+
+PL 侧模块划分与职责见表~\ref{tab:pl}。
+
+\begin{table}[H]\centering\small
+\caption{PL 模块划分（合计 2100+ 行 SystemVerilog）}
+\label{tab:pl}
+\begin{tabular}{@{}p{5.1cm}rp{4.9cm}@{}}
+\toprule
+模块 & 行数 & 职责 \\
+\midrule
+\code{hx30hm\_g1\_engine.sv} & 295 & 半双工单线协议：组帧、校验、换向时序 \\
+\code{servo\_bus\_master.sv} & 72 & 总线占用与仲裁 \\
+\code{g2\_six\_axis\_controller.sv} & 443 & 六轴同步组帧、逐轴到位判定、限位、速度上限、deadline、标定日志 \\
+\code{g2\_descriptor\_guard.sv} & 71 & 命令描述符硬校验，非法帧在进总线前被拒 \\
+\code{safety\_monitor.sv} & 13 & 急停/看门狗/协议故障锁存，门控 \code{motion\_permit} \\
+\code{axi\_lite\_regs.sv} + \code{rtcs\_pkg.sv} & -- & ABI \code{0x5254000E} 寄存器映射 \\
+\code{trajectory\_engine.sv} & 15 & 接口预留，当前不产生运动（边界见 4.2 节） \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+三类安全机制都在 PL 内实现：\textbf{逐轴限位}在组帧前比对实测限位表，越界帧直接拒绝；
+\textbf{截止时间校验}为每条命令设 deadline，超时标记 \code{deadline\_miss} 并回报而不
+阻塞后续命令；\textbf{故障锁存}把舵机错误位分轴保存，配合掩码区分“可屏蔽的过载”与
+“不可屏蔽的通讯/限位故障”。之所以放在 PL：这些判断必须在帧发出前的同一拍完成，
+放到 Linux 侧就会受调度延迟影响。
+
+% =============================================================================
+\section{完成情况及性能参数}
+
+\subsection{整体介绍}
+
+\PHOTO{待补：整套系统的实物照片，模板明确要求“正面、斜 45° 全局性照片”。
+建议一张正面全景、一张 45° 斜视（能看到机械臂、传送带、相机三者的空间关系）。}
+
+系统最终形态为：传送带水平放置，机械臂位于带侧、夹爪悬于带面上方，相机固定在带面正
+上方，上位机置于一侧，全部硬件可在一张 1.2\,m 长的桌面上搭完。
+
+\subsection{工程成果}
+
+\subsubsection{机械成果}
+
+\PHOTO{待补：机械臂与夹具实物照片。建议含夹爪张开/闭合两个状态的近景，以及爪内宽与
+40\,mm 工件的尺寸对比——这个余量是动态抓取可行性的前提。}
+
+\subsubsection{电路成果}
+
+\PHOTO{待补：板卡与舵机供电、接线实拍。建议拍到 USB-UART 与相机两根 USB 线、
+舵机总线并联的接线方式，以及电源分配。}
+
+\subsubsection{软件成果}
+
+\PHOTO{待补：上位机运行界面截图。建议截“一次成功抓取”的完整输出：采样行、
+CAPTURE\_REPLY、CAPTURE\_POINT 三段，以及带检测框的可视化画面。这是“软件真在跑”
+最直接的证据。}
+
+\subsection{特性成果}
+
+\paragraph{（1）静态抓取闭环} 13 次连续触发全部成功抓取并放置，无碰撞、无掉件、
+无死区停。逐次记录见表~\ref{tab:trials}，原始日志与带框图随作品提交。
+
+\begin{table}[H]\centering\footnotesize
+\caption{静态抓取闭环逐次结果（2026-10-26，13 次连续触发）}
+\label{tab:trials}
+\begin{tabular}{@{}crrcccc@{}}
+\toprule
+\# & $x$ / mm & $y$ / mm & 夹持位置 & 周期 / ms & 判据 & 结果 \\
+\midrule
+1  & 372.16 & 36.13 & 2389 & 10961 & contact & 成功（首轮含归位） \\
+2  & 357.62 & 35.79 & 2373 & 7741  & contact & 成功 \\
+3  & 307.34 & 35.78 & 2409 & 8046  & contact & 成功 \\
+4  & 341.86 & 37.63 & 2375 & 7843  & contact & 成功 \\
+5  & 380.88 & 37.27 & 2381 & 7639  & contact & 成功 \\
+6  & 309.32 & 35.44 & 2397 & 8046  & contact & 成功 \\
+7  & 372.43 & 35.51 & 2373 & 7691  & contact & 成功 \\
+8  & 347.62 & 34.86 & 2380 & 7842  & contact & 成功 \\
+9  & 311.41 & 35.66 & 2387 & 9423  & contact & 成功 \\
+10 & 356.25 & 35.49 & 2385 & 7741  & contact & 成功 \\
+11 & 300.14 & 38.77 & 2391 & 8046  & contact & 成功（$y$ 偏大，略卡顿） \\
+12 & 380.80 & 34.30 & 2382 & 7691  & contact & 成功 \\
+13 & 403.11 & 36.40 & 2398 & 7537  & contact & 成功 \\
+\midrule
+\multicolumn{4}{@{}l}{合计 13/13，$x$ 覆盖 300.1--403.1\,mm} &
+\multicolumn{3}{l}{P50 = 7842\,ms，P95 $\approx$ 9423\,ms，max = 10961\,ms} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{（2）定位精度} 同一物理点三次读数 372.17 / 372.16 / 372.43\,mm，极差
+$\pm$0.15\,mm；对 10-24 锚点的绝对偏差 1.1\,mm；9 帧抖动 0.15 / 0.29\,mm；带面重合度
+（标定四边形与实时绿掩膜的 IoU）0.73--0.80。四项共同说明：\textbf{视觉侧重复性比抓取
+容差小一个数量级}。
+
+\paragraph{（3）节拍} 13 次周期 P50 = 7.84\,s，P95 $\approx$ 9.4\,s，最大值 10.96\,s。
+最大值出现在首轮：\code{--standby auto} 跳过 standby，第一段从复位位直接六轴插值到抓取位
+（approach 4.21\,s），之后各轮回到 0.9\,s 量级。
+
+\paragraph{（4）资源与时序} 见 2.2.1 节：LUT 12.69\%、FF 10.84\%、DSP 0.91\%、BRAM 0，
+100\,MHz 全约束满足。资源留有大余量，可支撑把轨迹生成也搬进 PL。
+
+\paragraph{（5）优化前后对比} 见表~\ref{tab:opt}。
+
+\begin{table}[H]\centering\small
+\caption{主要优化项的前后对比}
+\label{tab:opt}
+\begin{tabularx}{\linewidth}{@{}p{2.5cm}p{4.4cm}X@{}}
+\toprule
+优化项 & 优化前（问题） & 优化后（结果） \\
+\midrule
+单轴逐轴 $\rightarrow$ 六轴联动 &
+单轴驱动 ID2 下放时越过竖直点（$\sim$1990）进入死区后静默停，仅返回
+\code{no\_motion\_ack}，工件悬在半空 &
+六轴同帧插值，\code{lift} 0.83--0.99\,s 到位，13/13 无死区停 \\
+带件横移 $\rightarrow$ 先升后摆 &
+在 \code{lift} 内横移时腕部自转把工件拧掉；照抓取坐标推导抬升位则撞底座 &
+\code{lift} 锁 ID1 只垂直抬，横移交给 \code{place} 首段单轴；抬升位改用固定标准位，
+无掉件无碰撞 \\
+3 点表 $\rightarrow$ 6 点表 &
+区间 345--395\,mm（50\,mm），区间外夹端点，偏 25\,mm 即抓空 &
+295--420\,mm（125\,mm），区间内任意 $x$ 可用，覆盖 +150\% \\
+误检治理 &
+俯拍皮带时自动曝光过曝 + 镜面高光，单帧检出 1474 个框，\code{conf}$\geq$0.5 仍误检 &
+CPL 偏振片 + 压曝光 + 带面四边形 ROI 过滤，框外误检直接排除 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\TBD{\textbf{动态特性（本小节第 6 项）}。
+\textbf{静态版}：整节删除，并统一 1.2 节与 1.4 表的口径为“动态不在本次范围，列为后续
+工作”。\\
+\textbf{动态版}：按下列模板填，禁止留空表。\\
+（a）带速实测：方法、均值与离散度；\\
+（b）检测线 $x$、拦截点 $x$、飞行时间 $T_{\text{flight}}$ = 距离 / 带速，
+并说明满足 $T_{\text{flight}} > 3.5$\,s；\\
+（c）触发逻辑：检测时刻 $t_0$、闭爪时刻 $t_0 + T_{\text{flight}} - 0.9$\,s
+（闭爪实测 757\,ms）；\\
+（d）逐次结果表：带速 / $T_{\text{flight}}$ / 实际偏差 mm / 是否夹住 / 失败形态；\\
+（e）成败归因：爪太晚 $\rightarrow$ 夹空；爪太早 $\rightarrow$ 工件撞上张开的爪。\\
+参考数据：带长 490\,mm、示教区间 295--420\,mm。若检测线取 $x\approx120$、拦截点取
+$x=370$（相距 250\,mm），则带速 30/40/60\,mm/s 对应 $T_{\text{flight}}$
+8.3/6.3/4.2\,s 均可满足；80\,mm/s 时 3.1\,s 不满足。}
+
+% =============================================================================
+\section{总结}
+
+\subsection{工作总结}
+
+本作品把“看见—定位—抓取—放置”做成一条可复现的完整链路，并拆成三层：上位机负责感知与
+决策，PS 负责坐标到关节的映射与任务编排，PL 负责总线时序与安全校验。静态抓取闭环
+13/13、单轮 7.84\,s、定位重复性 $\pm$0.15\,mm，说明该链路在真实硬件上成立。
+
+工程上真正花时间的不是算法，而是三件“看不见”的事：让夹爪带件搬运时不自转、让单轴运动
+不越过死区、让“没夹到东西”能被自动发现。这三件都不属于常规意义的算法创新，但缺任何
+一件，13/13 都会变成“看起来成功”。
+
+\subsection{存在的不足}
+
+（1）\textbf{$y$ 方向不可补偿}。插值只读 $x$，工件在带宽方向偏多少，落点就偏多少；
+现有容差靠工件尺寸（40\,mm）吃掉了 $\pm$10\,mm 的示教误差，换成小件即暴露。
+
+（2）\textbf{只有一种工件、一条车道}。13/13 是同一 40\,mm 方块、$y$ 限 36$\pm$5\,mm
+条件下的结果，不能外推到其他尺寸或姿态。
+
+（3）\textbf{PL 不含轨迹生成}。\code{trajectory\_engine} 仅为接口预留，加减速规划在
+PS 软件里，PL 只做时序与校验；这是有意为之（PS 迭代快），但确实不是“PL 承担运动规划”。
+
+（4）\textbf{示教表精度受限于人工摆位}。六点相邻斜率正负交替（ID2 每 25\,mm 依次为
+$-3.16/-0.80/-1.56/-0.24/-2.12$ count），说明单点重复性只有 $\pm$10\,mm 量级——
+这是当前精度的真实天花板，不是插值算法的问题。
+
+\subsection{可扩展之处}
+
+（1）\textbf{工装改进}：在带面加一条 $y$ 向参考线或做带定位槽的取件托盘，把摆位误差从
+$\pm$5\,mm 压到 $\pm$2\,mm，成本几十元，是当前性价比最高的一步。
+
+（2）\textbf{PL 增强}：把梯形速度轨迹与硬件时间戳搬进 PL，前者改善节拍与冲击，后者可
+输出帧间隔抖动与 deadline 违约率直方图，为“实时性”提供定量证据。
+
+（3）\textbf{多工件与姿态}：把单类检测扩展为分类 + 朝向估计，用 ID5 补偿工件旋转，
+可覆盖长方体、圆柱等工件。
+
+（4）\textbf{可复用封装}：把“部署—标定—示教—联调”四步封装为脚本与技能包，换一台
+同型机械臂时只需重跑示教，不必重写代码。
+
+\subsection{心得体会}
+
+\TODO{队伍自写，1000 字内。模板允许包含研发与制作细节，建议围绕三件事展开：
+① 为什么最终放弃棋盘格标定与解析 IK（可引用 1.3 与 2.3.2 的论证）；
+② 三次因“按几何推导位点”而撞机/掉件的教训，以及之后改成“只用实测值”的纪律；
+③ 把“串口占用、误检、夹空”这些看似琐碎的问题逐个定位的过程——它比写算法更耗时间，
+但正是这些决定了系统能不能连续跑 13 次。}
+
+% =============================================================================
+\section{参考文献}
+
+\begin{enumerate}[label={[\arabic*]},leftmargin=2.6em]
+  \item Redmon J, Farhadi A. YOLOv3: An Incremental Improvement.
+        arXiv:1804.02767, 2018.
+  \item Jocher G, Qiu J, et al. Ultralytics YOLO11.
+        \url{https://github.com/ultralytics/ultralytics}, 2024.
+  \item Hartley R, Zisserman A. Multiple View Geometry in Computer Vision.
+        2nd ed. Cambridge: Cambridge University Press, 2004.
+  \item Bradski G. The OpenCV Library. Dr.\ Dobb's Journal of Software Tools, 2000.
+  \item AMD/Xilinx. Zynq-7000 SoC Technical Reference Manual (UG585). 2018.
+  \item AMD/Xilinx. Vivado Design Suite User Guide: Synthesis (UG901).
+  \item \TODO{厂商} HX-30HM 系列总线舵机通信协议手册.
+  \item 全国大学生嵌入式芯片与系统设计竞赛组委会. 2026 年选题指南（AMD）. 2026.
+\end{enumerate}
+
+\vspace{4pt}
+\noindent\footnotesize 注：模板限 20 篇以内，上列 8 篇为当前引用面；若动态版新增带速与
+触发相关论述，可再补 1--2 篇传送带同步抓取的文献。
+
+
+% =============================================================================
+% 附录：官方模板只列五部分，本附录为“加分材料”，若学校要求严格五部分可整段删除
+% =============================================================================
+\newpage
+\appendix
+\section*{附录 A\quad 复现步骤}
+\addcontentsline{toc}{section}{附录 A\quad 复现步骤}
+{\small
+\noindent\textbf{说明}：官方《技术文档模板》只列五部分，本附录为便于他人复现而增补，
+不占正文篇幅；若学校要求严格按五部分提交，可将本附录整体删除，不影响正文结论。
+
+\begin{enumerate}[label=\arabic*.,leftmargin=1.8em]
+  \item \textbf{硬件搭建}：AX7Z020 上电，六个 HX-30HM 并联接同一路电源与信号线，
+        相机固定在带面正上方，上位机以 USB-UART 连板卡（该口同时是控制台）。
+  \item \textbf{环境}：Vivado / PetaLinux 2023.2（赛题推荐 2026.1 或 2025.2，
+        本项目用 2023.2，构建脚本 \code{build.tcl} 可直接在 2025.2 重跑）；
+        上位机 Python 3.11 + PyTorch 2.5.1（CPU）+ Ultralytics 8.4 + OpenCV 4.10。
+  \item \textbf{构建与上板}：\code{vivado -mode batch -source build.tcl} 产出
+        \code{.bit} 与 \code{.xsa}；SD 卡放入 \code{BOOT.BIN}、\code{image.ub}
+        与运行载荷，板端登录后把载荷拷到 \code{\~/rtcs}（该目录是 RAM，断电即丢）。
+  \item \textbf{标定}：\code{belt\_calibration\_dynamic.py} 自动找带面四角并保存
+        \code{calibration.json}；用锚点验帧，读数应与标称值相差不超过 2\,mm。
+  \item \textbf{示教}：把臂 jog 到夹爪正好包住工件，\code{teach\_add\_point.py}
+        录取该点的五轴实测值；重复 6 次得示教表，\textbf{关节值只能取自现场
+        \code{diagnose}，不得按几何比例推导}。
+  \item \textbf{运行}：板端起 \code{static\_grasp\_server.py} 接收坐标，上位机
+        \code{capture\_agent.py} 出点并下发；单轮输出 \code{grip=contact|empty}
+        与 \code{gripper\_position}。
+  \item \textbf{结果比对}：与 3.3 节的逐次表逐条核对；指标与原始证据的对应关系见附录 B。
+\end{enumerate}
+}
+
+\section*{附录 B\quad 指标与证据对照}
+\addcontentsline{toc}{section}{附录 B\quad 指标与证据对照}
+{\small
+\begin{tabular}{@{}p{3.2cm}>{\raggedright\arraybackslash}p{6.6cm}p{4.4cm}@{}}
+\toprule
+指标 & 数值 & 证据文件 \\
+\midrule
+静态抓取成功率 & 13/13 & 逐次日志与带框取证图 \\
+定位重复性 & $\pm$0.15\,mm & 同点多帧读数记录 \\
+单轮周期 & P50 7.84\,s & 每轮 \code{cycle\_ms} 字段 \\
+夹持判据 & 2373--2409 / 2214 & \code{gripper\_position} 逐次值 \\
+PL 资源与时序 & LUT 12.69\%、100\,MHz 全满足 & \code{utilization.rpt}\newline \code{timing\_summary.rpt} \\
+优化前后对比 & 见表~\ref{tab:opt} & 各阶段归档记录 \\
+\bottomrule
+\end{tabular}
+}
+
+\end{document}
