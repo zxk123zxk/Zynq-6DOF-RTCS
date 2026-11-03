@@ -3,7 +3,7 @@
 # 职责：把固定相机、固定工作平面上的像素中心 (u,v) 映射为工作平面毫米坐标 (x,y)，
 #       并用独立验证点与凸包有效性检查拒绝未标定或超界输入。
 # 本模块不做相机内参/畸变标定，也不做 Workspace -> Robot Base 外参变换。
-# 方案依据：docs/4.G4-static-vision-grasp.md 与 docs/vision/milestones/V1.1_*.md。
+# 方案依据：docs/engineering-notes.md §2.3（坐标约定）与 §6（视觉边界）。
 #
 # 三个阶段（一条链路，前一个的输出是后一个的输入）：
 #   collect   把"放在已知工作坐标上的工件"实拍图跑现有 YOLO，导出像素中心 -> 点对 CSV

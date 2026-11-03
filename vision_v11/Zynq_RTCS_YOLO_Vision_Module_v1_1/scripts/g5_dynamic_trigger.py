@@ -485,18 +485,31 @@ def one_cycle(args, calibration, detector, camera, link: Link, plan: Plan, cls,
         print("G5_STAGE ok=%s took_ms=%d grip=%s x_int=%.1f"
               % (ok, took_ms, (reply or {}).get("grip"), x_int), flush=True)
         if not ok:
-            print("G5_WARN stage 没成功：臂可能没到拦截位，这一次大概率夹空（继续跑，"
-                  "按 /CLAUDE.md 不做硬门禁）", file=sys.stderr)
-        # **到位就立刻闭爪**，不再等到墙上时刻 t_close。
-        # 原先 sleep_until(t_close) 会把 move_to_pose_ms 的估计误差全变成干等：
-        # 估 1.95 s、实测 2.0 s，再加 stage_margin，就是"臂到位后愣 0.4~0.5 s"；
-        # 现在提前量只有 0.3 s，这点干等正好把物块放过去（2026-10-29 实测）。
+            # 臂没到位就别闭爪：闭了也只会夹空，而且这一趟的搬运/放置会从错的位姿起，
+            # 把下一轮也带歪（2026-11-03 现场就是这样越跑越差的）。
+            # 不是硬门禁：本轮记为 stage_failed 后**直接进入下一轮**，系统继续跑。
+            print("G5_WARN stage 没成功：臂没到拦截位，本轮不闭爪、跳过（记 stage_failed）",
+                  file=sys.stderr, flush=True)
+            record["result"] = "stage_failed"
+            append_jsonl(log_path, record)
+            return record
+        # **闭爪时刻取"到位"与 t_close 的晚者**，不是"到位就立刻闭"。
+        #
+        # 2026-11-03 实测教训：改了"到位即闭"之后，10 轮里 6 轮夹空，而夹空那 6 轮的
+        # send_err 是 -454~+532 ms —— 臂到拦截位的耗时比计划早 250~460 ms（或晚 500 ms），
+        # 闭爪时刻就整体跟着漂，物块要么还没进虎口、要么已经走过去。
+        # 命中的 4 轮 send_err 全在 +7~+17 ms，正好是"按时刻闭"的结果。
+        # 所以：早到就等到 t_close（这点等待是必需的，不是"愣神"）；晚到则立刻闭，不再拖。
+        close_at = max(arrived_at, t_close)
         drift_ms = (arrived_at - t_close) * 1000
         record["stage_drift_ms"] = round(drift_ms)
-        if abs(drift_ms) > 150:
-            print("G5_WARN 臂到位比计划%s %.0f ms：move_to_pose_ms 应按实测改（现 %d ms）"
-                  % ("晚" if drift_ms > 0 else "早", abs(drift_ms),
-                     round(plan.move_s * 1000)), flush=True)
+        if drift_ms > 150:
+            print("G5_WARN 臂到位比计划晚 %.0f ms：本次闭爪被迫推迟，move_to_pose_ms 应调大"
+                  % drift_ms, flush=True)
+        elif drift_ms < -150:
+            print("G5_INFO 臂到位比计划早 %.0f ms：等满 t_close 再闭爪" % -drift_ms,
+                  flush=True)
+        sleep_until(close_at)
     else:
         # 臂已经在拦截位（--pre-stage / --no-stage）：这时才需要按时刻等。
         sleep_until(t_close)

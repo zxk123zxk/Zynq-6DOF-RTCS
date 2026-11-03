@@ -1,0 +1,23 @@
+﻿metric,category,value,unit,condition,evidence,reproduce
+静态抓取成功率,core,13/13 (100),%,40 mm 方块;y=36±5 mm;传送带静止;AX7Z020 ABI 0x5254000E;13 次连续触发,evidence/g3-static-closedloop-20261026.md,"python scripts/capture_agent.py --serial COM8 --class-name cube"
+动态抓取成功率,core,15/16 (93.8),%,40 mm 方块;v=60.4–66.7 mm/s;17 次触发含 1 次未越线不计入分母,evidence/g5-dynamic-20261030.md,"python scripts/g5_dynamic_trigger.py --serial COM8 --loop"
+静态单轮周期 P50,core,7840,ms,收到坐标→exit 到位;含视觉与串口,evidence/g3-static-closedloop-20261026.md,同静态成功率
+静态单轮周期 P95,core,9423,ms,同上,evidence/g3-static-closedloop-20261026.md,同上
+静态单轮周期 max,core,10961,ms,首轮含归位,evidence/g3-static-closedloop-20261026.md,同上
+动态单轮周期 P50,core,4589,ms,武装→咬合→搬运→exit,evidence/g5-dynamic-20261030.md,同动态成功率
+动态单轮周期 P95,core,4788,ms,同上,evidence/g5-dynamic-20261030.md,同上
+臂推进耗时,core,1952,ms,待命位→拦截点 370 mm;六轴插值,evidence/g5-dynamic-20261030.md,g5_dynamic_trigger.py 日志 stage_ms
+闭爪到咬合,core,1010,ms,夹住工况;夹空为 562 ms,evidence/g5-dynamic-20261030.md,日志 close_ms
+定位重复性,core,±0.15,mm,同一物理点三次读数极差 372.17/372.16/372.43,evidence/g3-static-openloop-20261025.md,capture_agent.py --trial
+落点偏差（动态）,core,0.1–1.2,mm,预测落点 vs 实际咬合位置;15 次,evidence/g5-dynamic-20261030.md,日志 predicted_offset_mm
+臂到位抖动,core,4–19,ms,计划时刻 vs 实际到位;折合 0.25–1.2 mm,evidence/g5-dynamic-20261030.md,日志 stage_drift_ms
+串口上行时刻误差,core,3.5–18.7,ms,115200 8N1,evidence/g5-dynamic-20261030.md,日志 uplink_ms
+可抓取区间,core,295–420,mm,六点示教表覆盖;区间外只告警不抓,config/grasp_teaching_table.json,static_grasp_server.py --min-x/--max-x
+带面映射重合度,core,0.73–0.80,IoU,标定多边形 vs 实时带面掩膜,evidence/g3-static-openloop-20261025.md,capture_agent.py 日志 belt_iou
+夹持判据（夹住）,core,2364–2409,count,闭爪命令 2200;堵转位,evidence/g5-dynamic-20261030.md,日志 grip_pos
+夹持判据（夹空）,core,2214–2216,count,合到底,evidence/g5-dynamic-20261030.md,同上
+PL LUT 占用,resource,12.69,%,XC7Z020;Vivado 2023.2 impl_1,artifacts/reports/utilization.rpt,bash scripts/build_vivado.ps1 -Build
+PL FF 占用,resource,10.84,%,同上,artifacts/reports/utilization.rpt,同上
+PL DSP 占用,resource,0.91,%,2/220,artifacts/reports/utilization.rpt,同上
+PL BRAM 占用,resource,0.00,%,未使用,artifacts/reports/utilization.rpt,同上
+主时钟与时序,resource,100 MHz / WNS≥0,ns,clk_fpga_0;无违约端点,artifacts/reports/timing_summary.rpt,同上

@@ -1,0 +1,58 @@
+% =============================================================================
+%  附录 C 补丁：大模型协作记录与技能包提炼（赛题 3.3.5.3 要求的两节）
+%
+%  为什么单独成一个文件：report-1031.tex 已定稿冻结，本附录由文档负责人确认后并入。
+%  并入方式（二选一）：
+%    (a) 在 report-1031.tex 的 \end{document} 之前加一行：\input{appendix-c-llm-and-skill}
+%    (b) 按本文件正文手工粘贴到附录 B 之后
+%  并入后重编译两遍。仓库里对应的长文材料：docs/llm-collaboration.md、skill/README.md。
+% =============================================================================
+
+\newpage
+\section*{附录 C\quad 大模型协作与技能包}
+\addcontentsline{toc}{section}{\texorpdfstring{附录 C\quad 大模型协作与技能包}{附录 C 大模型协作与技能包}}
+{\small
+
+\noindent\textbf{（1）协作方式}
+
+本项目把大模型用在三件事上：读代码定位问题、给出排查顺序、生成可验证的检查脚本。
+三条约束贯穿全程：\textbf{约束写在提问里}（板卡型号、ABI、限位是编译期常量、位点不得推算），
+\textbf{只要排查顺序不要最终答案}，\textbf{每条建议必须能被一条命令验证}。
+逐条交互记录（提示词、模型回答摘要、自我纠错轨迹、落点文件）见随作品提交的
+\code{docs/llm-collaboration.md}。
+
+\noindent\textbf{（2）三次改变了方案的自我纠错}
+
+\textbf{其一，反光误检。}模型最初倾向"数据不够、重训一版"，但故障特征是"高光被当成目标"，
+重训只会把这个错误特征学得更牢。改为治理光学：压曝光 $\rightarrow$ 调灯
+$\rightarrow$ 换 90$^\circ$ 无畸变镜头 + 偏振片，误检消失。
+
+\textbf{其二，硬门禁事故。}我们曾把一条启发式（ID2 位点上限）写成硬门禁，结果把已实测的正确位点
+一起拦掉，当天进度停摆。此后立规：\textbf{会阻止任务继续执行的检查默认只告警，位点只能来自现场回读}。
+
+\textbf{其三，动态抓取四连坑。}串口回显被当回复、闭爪观测窗短于板端下限、越线判断先清标志再判断、
+过载回包拖死六轴命令。四条都是软件时序，没有一个要动机械结构；定位方法是把中间量全部打印，
+而不是猜"是不是力不够"。
+
+\noindent\textbf{（3）技能包}
+
+协作中沉淀出两项技能，置于 \code{skill/}，每项按"适用场景 / 使用方法 / 已验证效果 / 失效条件"
+四栏登记（见 \code{skill/README.md}）：
+
+\begin{itemize}
+  \item \code{skill/zynq-6dof-rtcs}：PS(Linux) + PL 自定义 AXI4-Lite 外设驱动物理执行器的
+        bring-up 与改动流程，含一套与本题无关的"AXI 外设通用基线"
+        （版本化寄存器映射先行、输出复位默认关断、单设备先证协议、描述符原子提交、
+        时延与故障路径同测、保留纯主机基线以量化 PL 收益）。
+        已验证：9 个 RTL testbench + 6 组 CLI 守卫全绿（\code{RTCS\_WSL\_REGRESSION\_PASS}），
+        ABI 由 0x02 迭代至 0x0E 未出现两侧语义不一致。
+        失效条件：IO 电平未核验、需要 DMA/HLS 高带宽通路、或无独立输出禁用手段时不适用。
+  \item \code{skill/rtcs-image-build}：Vivado 导出 XSA $\rightarrow$ PetaLinux 导入
+        $\rightarrow$ SD 卡三件套的可复现构建。已验证：本作品的 \code{.bit}/\code{.xsa} 与
+        \code{BOOT.BIN}/\code{image.ub} 均由该流程产出并上板启动。
+        失效条件：只证明构建可复现，不证明板卡启动与舵机可用；不授权写卡或烧 QSPI。
+\end{itemize}
+
+\noindent 说明：本作品未使用 PYNQ 框架（PL 为手写 RTL + AXI4-Lite，PS 为 PetaLinux 上的 C/C++ UIO
+程序），故不申报通用 PYNQ Skill，也不把普通构建流程包装成 Overlay。
+}

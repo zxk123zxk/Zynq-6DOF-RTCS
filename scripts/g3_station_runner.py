@@ -67,6 +67,12 @@ PER_AXIS_ORDER = (3, 2, 1, 4, 5)
 # 默认 30 会把它判成 fault=9；放宽到 PL 允许的上限 100，让它不阻塞后续动作。
 # 只放宽 ID 3；其余轴保持 PL 默认 30，避免掩盖真实碰撞。
 AXIS_TOLERANCE = {3: 100}
+# 搬运段的通用容差：**只要求大致到位**。
+# 2026-11-03 踩到：place 的第一步（ID1 单轴横摆、带着方块转 830 步）没传 --tolerance，
+# 落到 C 的默认 30；带载 + 回差让它进不了 30 的带，命令一直等到 PL 的 2 s 截止
+# → fault → place 判失败 → 直接走 exit 复位（现场看着就是"跳过放置"）。
+# 六轴命令早就给 ID3 放行到 100 了，单轴横摆用的是同一类判断，口径必须一致。
+TRANSIT_TOLERANCE = 100
 # 夹爪保持时给足容差：物块顶着夹爪，实测位置与命令目标天然有几百 count 的差。
 GRIPPER_HOLD_TOLERANCE = 100
 # 夹爪开合的观察期（ms）。夹住物块时接触位永远进不了容差带，只能等满窗口才返回；
@@ -91,7 +97,8 @@ def step_targets(item: dict, hold: int | None) -> list[int]:
 
 
 def build_move_six_args(uio: str, item: dict, six_cli: str, targets: list[int],
-                        observe_ms: int, hold: int | None) -> list[str]:
+                        observe_ms: int, hold: int | None,
+                        loose_id3: bool = False) -> list[str]:
     """把一步工位计划翻译成 move-six 命令参数。six_cli 可带参数（如
     ``python3 mock.py``），用 shlex 拆分。"""
     parts = shlex.split(six_cli) + ["--uio", uio, "move-six"]
@@ -106,7 +113,10 @@ def build_move_six_args(uio: str, item: dict, six_cli: str, targets: list[int],
     # 夹爪夹紧必然报过载；屏蔽它的 ERROR，避免整条六轴命令被判失败。
     parts += ["--ignore-error", str(GRIPPER_AXIS)]
     # ID3 只在抓取那一步要求精确；其余搬运步骤只要求大致到位。
-    if item["name"] != "grasp":
+    # ``loose_id3`` 给**动态拦截的 stage** 用：那一趟的终点是"停在拦截位等着闭爪"，
+    # ID3 带载漂几十步不影响抓取，但如果这里要求严格，grasp 就会偶发判失败 →
+    # runner 直接走 exit 回位 → 现场看到的"刚要抓取就突然复位"。
+    if item["name"] != "grasp" or loose_id3:
         parts += ["--ignore-arrival", "3"]
     # 夹持期间 ID6 顶着物块，位置会在过载保护的一收一顶之间来回漂（实测漂移
     # 常超 100 count）。它的目标已被接触位置钉住，不需要参与"连续三轮进带"判定；
@@ -306,9 +316,11 @@ def apply_grasp_point(plan: dict, x_mm: float, y_mm: float, table_path: Path) ->
 
 
 def run_move_six(uio: str, item: dict, six_cli: str, targets: list[int],
-                 observe_ms: int, hold: int | None, dry_run: bool) -> tuple[bool, str]:
+                 observe_ms: int, hold: int | None, dry_run: bool,
+                 loose_id3: bool = False) -> tuple[bool, str]:
     """执行一步六轴运动，返回 (是否成功, 输出文本)。"""
-    parts = build_move_six_args(uio, item, six_cli, targets, observe_ms, hold)
+    parts = build_move_six_args(uio, item, six_cli, targets, observe_ms, hold,
+                                loose_id3=loose_id3)
     cmdline = shlex.join(parts)
     if dry_run:
         return True, "DRY_RUN " + cmdline
@@ -328,7 +340,8 @@ def fault_line(output: str) -> str:
 
 def run_step(uio: str, item: dict, six_cli: str, single_cli: str,
              targets: list[int], observe_ms: int, hold: int | None,
-             transit: str, dry_run: bool) -> tuple[bool, str]:
+             transit: str, dry_run: bool,
+             loose_id3: bool = False) -> tuple[bool, str]:
     """一步的搬运方式：默认六轴同步；``--transit per-axis`` 仅供排障。
 
     夹爪的过载已由 PL 的逐轴错误掩码（``--ignore-error 6``）屏蔽，六轴命令不会
@@ -336,7 +349,8 @@ def run_step(uio: str, item: dict, six_cli: str, single_cli: str,
     """
     if transit == "per-axis":
         return run_per_axis(uio, item, single_cli, targets, dry_run)
-    return run_move_six(uio, item, six_cli, targets, observe_ms, hold, dry_run)
+    return run_move_six(uio, item, six_cli, targets, observe_ms, hold, dry_run,
+                        loose_id3=loose_id3)
 
 
 def _first_int(pattern: str, output: str, base: int = 10) -> int | None:
@@ -484,6 +498,7 @@ def run_place(uio: str, item: dict, six_cli: str, single_cli: str, targets: list
                                        "--target", str(targets[0]),
                                        "--speed-raw", str(item["speed_raw"][0]),
                                        "--time-raw", str(item["time_raw"][0]),
+                                       "--tolerance", str(TRANSIT_TOLERANCE),
                                        "--execute"]
     if dry_run:
         first = "DRY_RUN " + shlex.join(parts)
@@ -525,6 +540,8 @@ def run_plan(plan: dict, uio: str, six_cli: str, single_cli: str, loops: int,
         cycle_start = time.monotonic()
         ok_cycle = True
         empty_grip = False           # 本次循环是否出现过"合到底但没夹住"
+        closed_this_cycle = False    # 本轮是否真的执行过 close（决定末行 grip= 报什么）
+        degraded = False             # stage 这一趟有没有"带伤收尾"（有则日志里标出来）
         # 夹爪接触位置；闭合后接管后续各步的 ID 6 目标。
         # --resume lift/place 时闭爪（和抬升）已在 server 侧做完，接触位置由 --grip-hold 传进来。
         hold: int | None = grip_hold if resume in ("lift", "place") else None
@@ -565,7 +582,8 @@ def run_plan(plan: dict, uio: str, six_cli: str, single_cli: str, loops: int,
                                     observe_ms, hold, dry_run)
             else:
                 ok, out = run_step(uio, item, six_cli, single_cli, targets,
-                                   observe_ms, hold, transit, dry_run)
+                                   observe_ms, hold, transit, dry_run,
+                                   loose_id3=(stop_after == "grasp"))
             took = int((time.monotonic() - step_start) * 1000)
             if ok:
                 if resume_skip:
@@ -591,7 +609,8 @@ def run_plan(plan: dict, uio: str, six_cli: str, single_cli: str, loops: int,
                     print(f"G5_READY_AT step={name} targets={targets} "
                           f"gripper_open={targets[GRIPPER_AXIS - 1]} "
                           f"hold={hold_text} "
-                          f"mono_ms={time.monotonic() * 1000.0:.1f}")
+                          f"mono_ms={time.monotonic() * 1000.0:.1f}"
+                          + (" degraded=true" if degraded else ""))
                     print(f"G3_CYCLE end={cycle} success=1 grip=open "
                           f"stopped_after={name}")
                     print(f"G3_CYCLE timing elapsed_ms="
@@ -600,8 +619,45 @@ def run_plan(plan: dict, uio: str, six_cli: str, single_cli: str, loops: int,
                           f"aborted=0 stopped_after={name}")
                     return failures
             else:
-                print(f"G3_STEP name={name} result=FAIL fault={fault_line(out)}")
+                fault_text = fault_line(out)
+                if stop_after:
+                    # **stage 这一趟任何一步失败都不回位。**
+                    # 这一趟的唯一目的是"停在拦截位张爪等着闭爪"；回位（exit）等于把这一轮
+                    # 直接作废——现场看到的就是"刚要抓取就突然复位"。位置不准的后果只是
+                    # 夹空（PC 侧 send_err 会显示），比整轮作废小得多；而且回位那次本身也可
+                    # 能失败（日志里 grip=None 那种就是连 exit 也失败、直接 ABORT），
+                    # 会把下一轮一起带坏。
+                    print(f"G3_WARN {name} result=FAIL fault={fault_text}："
+                          "stage 不回位（位置不准只会夹空）", file=sys.stderr)
+                    degraded = True
+                    if name == stop_after:
+                        # 正好是"停在拦截位"那一步：直接按到位收尾，闭爪交给 PC。
+                        print(f"G5_READY_AT step={name} targets={targets} "
+                              f"gripper_open={targets[GRIPPER_AXIS - 1]} hold=none "
+                              f"mono_ms={time.monotonic() * 1000.0:.1f} degraded=true")
+                        print(f"G3_CYCLE end={cycle} success=1 grip=open "
+                              f"stopped_after={name}")
+                        print(f"G3_CYCLE timing elapsed_ms="
+                              f"{int((time.monotonic() - cycle_start) * 1000)}")
+                        print(f"G3_RUN_SUMMARY cycles={cycle} failures={failures} "
+                              f"aborted=0 stopped_after={name}")
+                        return failures
+                    continue          # 其它步失败：跳过它的收尾，继续往下一步走
+                print(f"G3_STEP name={name} result=FAIL fault={fault_text}")
                 ok_cycle = False
+                # 手里还夹着东西就先松爪，再回位。
+                # 2026-11-03 现场：多件在线上时，搬运段偶尔失败，程序直接走 exit 复位，
+                # 方块被**带回**虎口里；下一轮于是从"虎口已经塞着东西"开始——抓取乱、
+                # 放置像被跳过、越来越差。先张爪把件放下（就地放），再复位，链条才断得干净。
+                if hold is not None:
+                    release = (by_name.get("place") or {}).get("gripper") or {}
+                    if release.get("command") == "open":
+                        rel_ok, rel_detail, rel_pos = run_gripper(
+                            uio, release, single_cli, dry_run)
+                        print(f"G3_STEP name=release_after_fail result={rel_detail}"
+                              + (f" position={rel_pos}" if rel_pos is not None else ""))
+                        if rel_ok:
+                            hold = None        # 已经松开：复位时不要再把 ID6 钉在接触位
                 if name != "exit":
                     exit_item = by_name["exit"]
                     exit_ok, exit_out = run_step(
@@ -639,6 +695,7 @@ def run_plan(plan: dict, uio: str, six_cli: str, single_cli: str, loops: int,
                     print("  DRY_RUN " + shlex.join(
                         build_single_axis_args(uio, action, single_cli)))
                 if action.get("command") == "close":
+                    closed_this_cycle = True
                     # 接触位置接管保持；读不到就退回命令目标并明确标注，不静默。
                     hold = position if position is not None else action["target_count"]
                     if position is None and not dry_run:
@@ -664,7 +721,15 @@ def run_plan(plan: dict, uio: str, six_cli: str, single_cli: str, loops: int,
                     return failures
                 break
         # dry-run 下夹爪根本没动，写 contact 会误导人（首连链路测试时最容易看错）。
-        grip = "dry_run" if dry_run else ("empty" if empty_grip else "contact")
+        # 同理：**没闭过爪就不能报 contact**。2026-11-03 踩到：dynamic_stage 用
+        # --stop-after grasp 收尾时根本不闭爪，可这一行照旧写 contact，PC 侧
+        # 打出来的就是 "G5_STAGE ok=False grip=contact" 这种不可能的组合，看着像回包错位。
+        if dry_run:
+            grip = "dry_run"
+        elif not closed_this_cycle:
+            grip = "open"
+        else:
+            grip = "empty" if empty_grip else "contact"
         print(f"G3_CYCLE end={cycle} success={1 if ok_cycle else 0} grip={grip}")
         print(f"G3_CYCLE timing elapsed_ms={int((time.monotonic() - cycle_start) * 1000)}")
         if not ok_cycle:

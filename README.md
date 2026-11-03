@@ -1,52 +1,89 @@
-# Zynq-6DOF-RTCS
+# Zynq 六轴机械臂视觉引导抓取系统
 
-AX7020（XC7Z020）PS/PL 六轴 HX-30HM 总线舵机控制工程。源码、XSA、bitstream 和仓库 SD 三件套为 ABI **0x5254000E**。2026-10-13 仓库镜像已更新 ID 6 限位为 2050–3000；**2026-10-14 板端 `limits` 实测读回 2050–3000，新版镜像已在位**（同一 ABI 不能区分两版限位，仍须逐轴 `limits` 核对）。**ID 1–5 为关节，ID 6 为夹爪**；**ID 5 的旧窄内部角度窗口已由官方软件重新校准并实测通过**。相机为**中奥维柯 3 mm / 90° 无畸变 UVC + CPL 偏振片**（2026-10-17 替换原幻尔 120° 广角，实测 1280×720，无深度）。版本与哈希见 [artifacts/sd/SHA256SUMS](artifacts/sd/SHA256SUMS)，载荷拷板步骤见 [半自动闭环 §5.1](docs/9.半自动闭环（static capture）.md)。
+面向流水线**异常品剔除工位**的桌面分拣单元：单目相机 + Zynq-7020 直驱 6 只 HX-30HM 总线舵机，
+按异常品密度切换两种模式——带面静止时**批次拣选**，连续运行时**预测拦截**。
 
-> **流程约定：本仓库采用[双轨制](docs/0.1hardware_bringup.md)。** 竞赛轨只保留红线门禁（独立供电、物理禁发、PL 限位/速度/截止时间、独立硬件急停、实测标定、单帧提交、不自动重试），**任何流程性门禁不得阻塞竞赛轨的运动路径**；证据归档、逐步操作者确认、100 次循环与 P99 统计属归档轨，在周末补齐。冲刺日程与每日任务卡见 [docs/7.sprint-plan-daily-tasks.md](docs/7.sprint-plan-daily-tasks.md)。
+参赛编号 49824 · 2026 全国大学生嵌入式芯片与系统设计竞赛 · FPGA 创新赛道 · AMD 自主选题（初级组）。
 
-## 阶段状态
-
-| 阶段 | 状态 | 入口 |
+| 实测指标 | 数值 | 条件 |
 | --- | --- | --- |
-| G0 / G1 | 已通过基础启动和只读协议验收 | [总规划](docs/0.1hardware_bringup.md) |
-| G2 | 已通过：六轴实测限位、参考位置与六轴同步运动；ABI 0E 上板，ID 5 单轴远端运动实测成功 | [G2 总结与原始证据](docs/2.G2-six-axis-calibration.md) |
-| G3 | **已通过**：七步工位（`standby→approach→grasp→lift→place→retreat→exit`）实测跑通，故障不锁死，单轮 7.4–8.2 s；夹爪为 ID 6 | [G3 静态闭环](docs/3.G3-static-closed-loop.md) |
-| G4 | **闭环已通过**：`static capture` → 串口 → 板端自动七步，**13/13 全中**；6 点五轴示教表覆盖 **295–420 mm**（开环另 18/18） | [G4 视觉静抓](docs/4.G4-static-vision-grasp.md) |
-| G5 | 未开始：传送带动态抓取（预测拦截） | [G5 动态拦截](docs/5.G5-conveyor-dynamic.md) |
-| G6 | 未开始：稳定性、性能度量与决赛交付 | [G6 交付](docs/6.G6-final-delivery.md) |
+| 批次拣选成功率 | **13/13** | 40 mm 方块，带面静止，单轮 P50 7.84 s |
+| 连续抓取成功率 | **15/16 = 93.8%** | 带速 60.4–66.7 mm/s，单轮 P50 4.59 s |
+| 落点偏差 | 0.1–1.2 mm | 预测落点 vs 实际咬合位置 |
+| 臂到位抖动 | 4–19 ms | 折合 0.25–1.2 mm |
+| PL 资源 | LUT 12.69%、FF 10.84%、BRAM 0 | XC7Z020，Vivado 2023.2 impl |
+| 时序 | 100 MHz 全约束满足 | `All user specified timing constraints are met.` |
 
-G2 的实际 TTL 顶层编入六轴命令闭区间（ID 5 的 0–4000 是**命令范围标注**，非机械全程实测；本阶段应补记真实区间），原始速度上限 1500；PL 发前检查物理禁发、目标限位、截止时间和总线占用。ABI 0E 的显式绝对目标单轴/六轴命令直接 WRITE，不先 READ 起点；发后仍检查单轴 ACK 或六轴逐轴稳定反馈，一次提交最多一帧、不自动重试。绝对运动的起点和实际位移显示 `UNAVAILABLE`，目标误差由发后有效位置计算。六轴广播没有 ACK。测得的六轴参考位置不是安全自动回位姿态。接口定义以 [PL 寄存器包](src/pl/rtl/rtcs_pkg.sv)和 [PS 头文件](src/ps/linux/include/rtcs_registers.hpp)为准。
+全部指标的口径、测试次数与证据文件见 [`metrics/`](metrics/README.md)。
 
-ABI 13 起在运动故障时保存舵机 ERROR 原始字节及 ID（ABI 0E 保留），并配置 `uio_pdrv_genirq` 开机自动绑定 `generic-uio`。ABI 0E 删除了绝对运动的起点预读门槛——该门槛曾把舵机一个**瞬时** ERROR 位放大成跨命令粘滞的全局锁死，是本仓库历史上最严重的一次进度拖慢。[ID 5 旧窄窗口根因与 2026-10-12 重新校准实测](docs/2.G2-six-axis-calibration.md)已归档。**当次 ERROR 如实报告，不锁死后续显式命令**；G3 任务结果与伺服到位结果分别记录，运动期间有人在场并能物理断电。
+## 目录对照（AMD 选题指南 3.3.5.4 推荐结构 → 本仓库）
 
-## 核心验收代码
+推荐结构非强制，采用其他组织方式的队伍须给出对照。本仓库的对应关系：
 
-在 WSL 中运行完整 RTL 与 CLI 离线回归：
+| 推荐目录 | 本仓库 | 说明 |
+| --- | --- | --- |
+| `README.md` | `README.md` | 本文件 |
+| `src/` | `src/` | `pl/`（SystemVerilog RTL + XDC + Vivado TCL）、`ps/`（PetaLinux app + Linux CLI）、`vision/`（检测与平面映射） |
+| `sim/` | `sim/` | Verilator/Icarus 测试台与离线回归 `sim/run_regression_wsl.sh` |
+| `build/` | `build.tcl` + `artifacts/reports/` | 构建入口在根目录（与报告附录 A 的命令一致），综合/实现报告在 `artifacts/reports/` |
+| `board/` | `artifacts/hw/`、`artifacts/sd/`、`artifacts/sd_payload/` | `.bit` + `.xsa`、SD 三件套、板端运行载荷 |
+| `data/` | `config/`、`evidence/`、`metrics/`、`models/` | 标定与示教表、逐次原始记录、指标汇总、权重 |
+| `skill/` | `skill/` | 两个技能包，见 `skill/README.md` |
+| `report/` | `docs/` | `report-1031.tex`/`.pdf`、`engineering-notes.md`、`llm-collaboration.md`、插图与厂商资料 |
 
-    bash sim/run_regression_wsl.sh
+`docs/` 内仍有四个中文文件名（`镜像文件启动.md` 与 3 张被 tex 直接引用的插图），属历史冻结文件：
+前者是旧镜像的历史笔记、不参与当前流程，后者改动会让报告编译失败，故保留并在
+[`docs/README.md`](docs/README.md) 中登记；其余文件名均为纯英文小写。
 
-新镜像上板后先在物理禁发状态运行 probe 和 limits；装上 J20-36/W15 到 J20-38/GND 的允许跳线后可只读 diagnose 与 torque-status。**2026-10-12 的六轴基线（`limits` + `diagnose` + `torque-status`）已全绿**，原始输出见 [G2 板端基线](docs/2.G2-six-axis-calibration.md)。注意上电后 `0x28=0`（卸力），不下扭矩开关舵机不会动。六轴目标只能根据当次 diagnose 与实测机械空间显式填写。stop 与独立断电急停的操作顺序见 [独立断电急停](evidence/independent_estop.md) 与 [软件停止](evidence/software_stop.md)。板端运动不由构建脚本执行。
+## 快速复现
 
-## 核心目录
+1. **硬件**：AX7Z020 上电；6 只 HX-30HM 并联接独立 5–14 V 电源与单线总线，共地；
+   相机固定在带面正上方，上位机用 USB-UART（115200 8N1）连板卡。
+2. **构建**：`vivado -mode batch -source build.tcl` → `artifacts/hw/rtcs_system.bit` + `.xsa`
+   （默认带 TTL 端口；加 `-tclargs base` 只做 BD/RTL 验证，不导出舵机 IO）。
+   随后按 `src/ps/petalinux/` 的脚本由 XSA 生成 `BOOT.BIN` / `image.ub`。
+3. **上板**：SD 卡放 `BOOT.BIN` + `image.ub` + 运行载荷；登录后把载荷拷到 `~/rtcs`
+   （该目录在 RAM，断电即丢）。载荷由 `bash scripts/stage_sd_payload.sh` 从正本生成，
+   5 个 `.py` → `~/rtcs/scripts/`，4 个配置 → `~/rtcs/config/`。
+4. **标定与示教**：`belt_calibration_dynamic.py` 自动找带面四角存 `calibration.json`；
+   `teach_add_point.py` 逐点回读五轴位置建 6 点示教表。**关节值只能取自现场 `diagnose` 回读，
+   不得按几何比例推导。**
+5. **运行**：板端起 `static_grasp_server.py`；上位机二选一
+   —— `capture_agent.py --serial COM8 --class-name cube`（批次拣选）
+   —— `g5_dynamic_trigger.py --serial COM8 --loop`（连续抓取）。
+   每轮输出 `grip=contact|empty`、`gripper_position`、`cycle_ms`。
 
-| 目录 | 内容 |
+完整步骤见 `docs/report-1031.pdf` 附录 A；接口、参数与故障表见
+[`docs/engineering-notes.md`](docs/engineering-notes.md)。
+
+## 两种模式的差别
+
+共用同一条链路（视觉 → 一对毫米坐标 → PS 七步状态机 → PL 总线帧 → 舵机），差别只在决策层：
+
+- **批次拣选**：带面静止，上位机取点后逐件下发，"看准了再动"。
+- **连续抓取**：每帧估带速，`x_int = x + v×(advance+move+margin)` 现算拦截点，
+  按预测时刻推进、**到位即闭爪**，实测臂到位抖动 ≤19 ms。
+
+## 代码地图
+
+| 位置 | 内容 |
 | --- | --- |
-| [src/pl/rtl/](src/pl/rtl/rtcs_top.sv) | AXI 寄存器、G2 六轴控制器、描述符检查、舵机协议与实际顶层 |
-| [src/ps/linux/apps/](src/ps/linux/apps/rtcs_pl_g2_six.c) | G1、G2 单轴、G2 六轴 UIO CLI |
-| [src/vision/](src/vision/) | cube/cylinder 多目标像素检测、USB Camera 与离线推理 |
-| [config/](config/g2_measured_limits.toml) | 安装状态实测限位和参考位置 |
-| [sim/](sim/README.md) | RTL、CLI mock、完整离线回归 |
-| [scripts/](scripts/build_vivado.ps1) | Vivado、XSA 导入和 PetaLinux SD 构建 |
-| [artifacts/hw/](artifacts/hw/rtcs_system.xsa) 与 [artifacts/sd/](artifacts/sd/SHA256SUMS) | ABI 0E XSA、bitstream、SD 三件套及哈希；旧 ABI 见归档 |
-| [docs/](docs/0.1hardware_bringup.md) | 阶段 G0–G6、双轨制门禁、冲刺日程与每日任务卡；**报告分工见 [8.报告分工与素材清单](docs/8.报告分工与素材清单.md)**，半自动闭环见 [9.static capture](docs/9.半自动闭环（static capture）.md)，**FPGA 作用与赛道符合性见 [10](docs/10-FPGA在项目中的作用与赛道符合性.md)**，动态抓取见 [11.评估与启动提示词](docs/11-动态抓取可行性评估与启动提示词.md)，最新进度见 [10.26 归档](docs/10.26-归档与10.27任务.md) |
-| [evidence/](evidence/g3-static-openloop-20261025.md) | 成功率、时序、锚点一致性的逐次原始记录（指标表配证据用） |
-| [artifacts/reports/](artifacts/reports/competition-plan-material-assessment-20261012.md) | 竞赛计划与素材评估、交接提示词 |
-| [artifacts/archive/](artifacts/archive/) | 旧 ABI 的 bit/XSA/SD 快照与操作记录；被取代的旧说明文档已清理，需要时从 git 历史取回 |
+| `src/pl/rtl/` | `hx30hm_g1_engine.sv`（协议时序）、`g2_six_axis_controller.sv`（六轴同步/限位/deadline）、`g2_descriptor_guard.sv`（帧前硬校验）、`safety_monitor.sv`、`axi_lite_regs.sv` + `rtcs_pkg.sv`（ABI `0x5254000E`） |
+| `src/ps/linux/apps/` | `rtcs-pl-g2`、`rtcs-pl-g2-six` 用户态 CLI（UIO mmap） |
+| `src/vision/` | 检测与平面单应映射，输出毫米坐标 |
+| `scripts/` | 板端 `static_grasp_server.py`、`g3_station_runner.py`、示教/标定/调速工具、载荷打包 |
+| `vision_v11/…/scripts/` | 上位机 `capture_agent.py`、`g5_dynamic_trigger.py`、`grasp_point.py`、`belt_calibration_dynamic.py` |
+| `skill/` | 技能包：Zynq AXI 外设 bring-up、PetaLinux 镜像构建 |
 
-当前构建使用 Vivado 2023.2 与 PetaLinux 2023.2。默认构建不导出舵机 IO；实际 TTL 镜像须用 Vivado 脚本的 Build/Ttl 选项，并保留独立舵机电源与物理禁发。G3 的轨迹引擎、FIFO 与硬件 IRQ 仍未实现（PS 侧软状态机承担任务编排）；100 次静态抓放与 P99 统计属归档轨，不是运动前置条件。
+## 验证与证据
 
-## 视觉模块
+- 仿真：`bash sim/run_regression_wsl.sh`（Verilator 5.008）→ `RTCS_WSL_REGRESSION_PASS`。
+- 综合与实现：`artifacts/reports/utilization.rpt`、`timing_summary.rpt`。
+- 板级：`evidence/` 下逐次记录（静态 13 次、动态 17 次），与报告 3.3 节逐条对应。
 
-`src/vision/` 提供 YOLO A 与实验性 OpenCV 几何检测入口，类别固定为 `0=cube`、`1=cylinder`，支持一帧输出多个目标的类别、置信度、原图检测框和像素中心。正式权重位于 `models/vision/`；视觉子模块的 AGPL-3.0 范围、第三方署名和复现步骤见 [视觉模块文档](docs/vision/README.md)，该范围不自动重许可独立的 FPGA/控制模块。
+## 许可
 
-当前视觉已能输出**传送带平面毫米坐标**（`plane_calibration` + `config/calibration.json`，1280×720 → 490×80 mm；**仍不提供 `yaw`**）。相机为**中奥维柯 3 mm / 90° 无畸变 UVC + CPL 偏振片**（2026-10-17 替换原幻尔 120° 广角），实测 1280×720/YUY2。PC 侧取点入口 `vision_v11/.../scripts/grasp_point.py`（多帧中位数 + 带面对位校验 + 软 ROI + `--trial` 归档）。**视觉只对黄色桌面与绿色传送带两种固定背景负责，不使用棋盘格标定板**；映射只在标定带面内有效，带外不外推。视觉模块不直接下发机械臂动作——坐标经 `--grasp-xy` 交板端。反光问题（10-14 木纹误检、10-15 皮带镜面高光）已由换镜头 + CPL 解决，过程见[反光诊断与自训决策](docs/vision/10.15-白方块反光诊断与自训决策.md)。
+本队自研部分（RTL、PS 侧程序、上位机与板端脚本、文档）采用 [MIT](LICENSE)。
+第三方依赖各自遵循其许可：Ultralytics YOLO11 与由其训练得到的权重为 AGPL-3.0，
+OpenCV 为 Apache-2.0，PetaLinux 与 Vivado 产物遵循 AMD 相应条款；
+`docs/resource_file/` 下的厂商手册版权归原厂，仅作工程参考随附。

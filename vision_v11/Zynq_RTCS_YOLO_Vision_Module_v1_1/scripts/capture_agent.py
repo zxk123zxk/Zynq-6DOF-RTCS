@@ -28,8 +28,10 @@
     .\\env.cmd scripts\\capture_agent.py --once --json
     .\\env.cmd scripts\\capture_agent.py --class-name cube --serial COM8
 
-**默认是常驻模式（2026-10-29 改）**：不需要手敲 `static capture`，检测到稳定目标就抓，
-抓完等带面清空 0.8 s 再武装，一直跑，**按 q 退出**。`--once` 才是跑一次就退。
+**默认是常驻模式（2026-10-29 改，10-31 修多件）**：不需要手敲 `static capture`，
+检测到稳定目标就抓，抓完立刻按 x 从大到小抓下一件，一直跑，**按 q 退出**。
+`--once` 才是跑一次就退。带上有几件就抓几件（按位置去重，不要求场景清空）；
+越出示教区间（`--min-x/--max-x`）的件不抓，只打一行 `CAPTURE_SKIP reason=out_of_range`。
 """
 from __future__ import annotations
 
@@ -53,6 +55,9 @@ from vision.plane_calibration import DEFAULT_PATH, PlaneCalibration
 # 连续多少帧"只有不抓的那一类"就当场判放行（不吃满 --timeout）。
 # 按 13/13 实测的 6 帧/0.5 s 算，4 帧≈0.33 s，圆柱在带上还能看清它就下结论。
 VETO_FRAMES = 4
+# 板端示教表的正本：抓取区间的上下沿由它决定，不另填常数（填了就会和表漂移）。
+ROOT = Path(__file__).resolve().parents[3]
+TEACHING_TABLE = ROOT / "config" / "grasp_teaching_table.json"
 BOARD_CMD = ("sudo python3 scripts/g3_station_runner.py config/g3_station_plan.json "
              "--uio /dev/uio0 --grasp-xy {x:.2f},{y:.2f} "
              "--teaching-table config/grasp_teaching_table.json --once")
@@ -116,7 +121,8 @@ def open_stack(args):
     return calibration, detector, camera
 
 
-def classify_veto(result, cls: int | None, calibration) -> object | None:
+def classify_veto(result, cls: int | None, calibration,
+                  min_conf: float = 0.0) -> object | None:
     """本次检测里"看见了、但按类别规则不抓"的目标（取带面内置信度最高的那个）。
 
     10-27 定：Cube 抓、Cylinder 放行。放行必须是**一条明确的结论**，不能等同于"没看见"
@@ -126,30 +132,61 @@ def classify_veto(result, cls: int | None, calibration) -> object | None:
     if cls is None:
         return None
     for item in sorted(result.detections, key=lambda d: d.confidence, reverse=True):
+        if item.confidence < min_conf:
+            continue
         if item.class_id != cls and gp.inside_belt(calibration, item.center_x, item.center_y):
             return item
     return None
 
 
+def _report_multi(result, cls, calibration, min_conf: float) -> bool:
+    """带面内≥2 个合规目标时打一行候选清单（每轮只打一次）。
+
+    多件时"只抓一件、其余不动"这类问题，光看结果日志是查不出来的：必须知道当帧到底
+    看见了几个、各自 x 是多少、最后选了哪个。返回 True 表示已报过。
+    """
+    items = [d for d in result.detections if cls is None or d.class_id == cls]
+    items = [d for d in items
+             if d.confidence >= min_conf
+             and gp.inside_belt(calibration, d.center_x, d.center_y)]
+    if len(items) < 2:
+        return False
+    items.sort(key=lambda d: calibration.to_mm(d.center_x, d.center_y)[0], reverse=True)
+    print("CAPTURE_MULTI n=%d 候选 x=%s → 选 x 最大那件"
+          % (len(items),
+             " ".join("%.0f(%.2f)" % (calibration.to_mm(d.center_x, d.center_y)[0],
+                                      d.confidence) for d in items[:6])), flush=True)
+    return True
+
+
 def do_capture(args, calibration, detector, camera, sampler: Sampler,
-               quiet: bool = False, timeout: float | None = None):
+               quiet: bool = False, timeout: float | None = None,
+               exclude: "list[float] | None" = None,
+               blocked: "list[float] | None" = None):
     """抓一次点。
 
     返回点 dict；被类别规则放行返回 {"skip": True, ...}；超时返回 None。
     ``quiet=True``（常驻模式）时，整段时间什么都没看见就不打 CAPTURE_FAIL——
     带子空着本来就不该刷错误，否则日志会被"失败"淹没。
     ``timeout`` 覆盖 ``--timeout``：常驻模式用短窗口轮询，新放上去的件能更快被发现。
+    ``exclude``：已经抓过/被判不可抓的 x（mm），选目标时先剔掉——**必须在选之前剔**，
+    否则带上有两件时，已抓那件位置上常驻的"夹爪误检"会被每帧选成第一，第二件永远轮不到。
+    ``blocked``：本次新判定为"不可抓"（越出示教区间、置信度过低）的位置，由调用方带时间戳
+    收进 ``exclude``；不返回的话下一轮又会选中同一件，把后面可抓的件堵住。
     """
     cls = gp.CLASS_FILTER[args.class_name]
     window_s = args.timeout if timeout is None else timeout
     started = time.monotonic()
     deadline = started + window_s
-    attempts, frames, no_target, off_belt = 0, 0, 0, 0
+    attempts, frames, no_target, off_belt, out_range = 0, 0, 0, 0, 0
     # 被类别规则挡下的帧计数（按类名分开记，便于日志里说清"放行的是圆柱"）
     vetoed: dict[str, int] = {}
     veto_conf = 0.0
-    print("CAPTURE_START stable=%.2fs tol=%.1fmm timeout=%.1fs only=%s" %
-          (args.stable_s, args.tol_mm, window_s, args.class_name), flush=True)
+    skipped = [float(x) for x in (exclude or ())]
+    multi_reported = False
+    print("CAPTURE_START stable=%.2fs tol=%.1fmm timeout=%.1fs only=%s range=%.0f..%.0f"
+          % (args.stable_s, args.tol_mm, window_s, args.class_name,
+             args.min_x, args.max_x), flush=True)
 
     while time.monotonic() < deadline:
         frame = camera.read()
@@ -160,10 +197,15 @@ def do_capture(args, calibration, detector, camera, sampler: Sampler,
         except ValueError as error:
             print("CAPTURE_WARN detect_skipped %s" % error, file=sys.stderr, flush=True)
             continue
-        target, n_all, margin = gp.pick_target(result, cls, calibration)
+        if not multi_reported:
+            multi_reported = _report_multi(result, cls, calibration, args.min_conf)
+        target, n_all, margin = gp.pick_target(result, cls, calibration,
+                                               exclude_x=skipped,
+                                               exclude_mm=args.dup_mm,
+                                               min_conf=args.min_conf)
         if target is None:
             no_target += 1
-            veto = classify_veto(result, cls, calibration)
+            veto = classify_veto(result, cls, calibration, args.min_conf)
             if veto is not None:
                 vetoed[veto.class_name] = vetoed.get(veto.class_name, 0) + 1
                 veto_conf = max(veto_conf, veto.confidence)
@@ -181,6 +223,20 @@ def do_capture(args, calibration, detector, camera, sampler: Sampler,
             # "变成任意的合法姿态"，臂就去抓空气——比不出点更糟。
             # 所以不采用；但只计数+告警，计时器照常走完，结论仍由超时给出。
             off_belt += 1
+            sampler.drop_if_lost(now)
+            continue
+        if not args.min_x <= x_mm <= args.max_x:
+            # 2026-10-31 加：**越出示教区间不抓**。插值两端是"夹住不外推"，
+            # 落在 290 左边会被当成 295 的姿态、落在 420 右边会被当成 420 的姿态，
+            # 结果臂照跑一轮、抓的是空气（更糟：可能撞到带外的结构件）。
+            out_range += 1
+            skipped.append(x_mm)
+            if blocked is not None:
+                blocked.append(x_mm)
+            if out_range == 1:
+                print("CAPTURE_SKIP reason=out_of_range x=%.1f 不在示教区间 %.0f..%.0f"
+                      "（夹住不外推，这一件不抓）" % (x_mm, args.min_x, args.max_x),
+                      flush=True)
             sampler.drop_if_lost(now)
             continue
         sampler.add(now, x_mm, y_mm, target.confidence)
@@ -208,8 +264,12 @@ def do_capture(args, calibration, detector, camera, sampler: Sampler,
     if vetoed and attempts == 0:
         return _pass_result(vetoed, veto_conf, frames)
     if not (quiet and attempts == 0):
-        print("CAPTURE_FAIL reason=timeout frames=%d no_target=%d off_belt=%d samples=%d"
-              % (frames, no_target, off_belt, len(sampler.samples)), flush=True)
+        print("CAPTURE_FAIL reason=timeout frames=%d no_target=%d off_belt=%d "
+              "out_range=%d samples=%d"
+              % (frames, no_target, off_belt, out_range, len(sampler.samples)), flush=True)
+    if out_range and not quiet:
+        print("CAPTURE_WARN 有 %d 帧的目标越出示教区间 %.0f..%.0f（没抓；要抓请补教点）"
+              % (out_range, args.min_x, args.max_x), flush=True)
     if off_belt and not quiet:
         print("CAPTURE_WARN 有 %d 帧的检测中心落在标定带面外（判为背景误检，已丢弃）"
               % off_belt, flush=True)
@@ -324,6 +384,22 @@ def send(args, packet: dict, point: dict) -> dict | None:
     return None
 
 
+def taught_range() -> tuple[float, float]:
+    """示教表覆盖的 x 区间（抓取区间的唯一来源）。读不到就退回 295..420 并告警。
+
+    为什么取表的实际两端而不是写死 290/420：插值两端是"夹住不外推"，表外 5 mm 的
+    物块轨迹仍然等于端点姿态；到底算不算"能抓"必须由表的覆盖范围说话。
+    """
+    try:
+        raw = json.loads(TEACHING_TABLE.read_text(encoding="utf-8"))
+        xs = [float(point["x_mm"]) for point in raw]
+        return min(xs), max(xs)
+    except (OSError, ValueError, KeyError, TypeError):
+        print("CAPTURE_WARN 读不到示教表 %s，抓取区间退回 295..420（可用 --min-x/--max-x 覆盖）"
+              % TEACHING_TABLE, file=sys.stderr, flush=True)
+        return 295.0, 420.0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -336,6 +412,14 @@ def main(argv=None) -> int:
                         help="防重抓：和上次下发的位置相差不到这么多 mm 就当作同一件")
     parser.add_argument("--retry-after-s", type=float, default=3.0,
                         help="防重抓：同一位置在这么多秒内不重复下发（夹空后重试要等）")
+    taught_lo, taught_hi = taught_range()
+    parser.add_argument("--min-x", type=float, default=taught_lo,
+                        help="可抓区间的下沿（mm），默认取示教表最小 x = %.1f" % taught_lo)
+    parser.add_argument("--max-x", type=float, default=taught_hi,
+                        help="可抓区间的上沿（mm），默认取示教表最大 x = %.1f" % taught_hi)
+    parser.add_argument("--min-conf", type=float, default=0.45,
+                        help="候选目标的置信度门槛。夹爪误检 0.26~0.43、真方块 0.74~0.87，"
+                             "0.45 把夹爪/背景挡在外面；真方块偏暗时可下调")
     parser.add_argument("--once", action="store_true", help="只抓一次就退出")
     parser.add_argument("--json", action="store_true", help="只输出一行 JSON")
     parser.add_argument("--log", type=Path, help="追加一行 JSONL（证据留痕）")
@@ -360,6 +444,8 @@ def main(argv=None) -> int:
     args.transport = "udp" if args.udp else ("serial" if args.serial else "stdout")
     if args.stable_s <= 0 or args.tol_mm <= 0 or args.timeout <= 0:
         parser.error("--stable-s / --tol-mm / --timeout 必须 > 0")
+    if args.min_x >= args.max_x:
+        parser.error("--min-x 必须小于 --max-x（当前 %.1f..%.1f）" % (args.min_x, args.max_x))
     if args.udp:
         host, _, port = args.udp.rpartition(":")
         if not host or not port.isdigit():
@@ -386,38 +472,44 @@ def main(argv=None) -> int:
 def auto_loop(args, calibration, detector, camera, sampler) -> int:
     """常驻模式：一直跑，抓完立刻按 x 从大到小抓下一件，按 q 退出。
 
-    三条纪律：
+    四条纪律：
       1. 发命令之后到回执之前**不做检测**——板端一动夹爪就进画面（还会被误检成 Cube）；
       2. 回执之后**立刻重新武装**，不要求场景清空：传送带上常常还有别的件，
          要求"清空"只会白等（10-29 踩过，死等 20 s）；
       3. 防重抓靠**位置去重**，不靠场景清空：同一位置（±dup_mm）刚试过，
          `--retry-after-s` 秒内不再重复下发；不同位置（多件）则立刻抓下一件。
+         去重是在 `pick_target` **选之前**剔掉的（10-31 改）：选完再否掉会让第二件
+         永远轮不到——已抓那件的位置上常驻着被误检成 Cube 的夹爪，它 x 更大。
+      4. 越出示教区间（`--min-x/--max-x`，默认取示教表两端）**不抓**，并把这个位置
+         记为已处理，免得它一直当"最大 x"把别的件堵住。
     """
     print("CAPTURE_READY 常驻模式：按 x 从大到小依次抓，按 q 退出", flush=True)
-    last_x = None
-    last_t = 0.0
+    recent: list[tuple[float, float]] = []      # (x_mm, 时间)：已下发或已判不可抓的位置
     index = 0
     while True:
         if "q" in keywatch.poll():
             print("CAPTURE_INFO 按 q 退出", flush=True)
             return 0
+        now = time.monotonic()
+        recent = [item for item in recent if now - item[1] <= args.retry_after_s]
+        blocked: list[float] = []
         sampler.samples.clear()
         index += 1
         print("CAPTURE_CYCLE start=%d" % index, flush=True)
         point = do_capture(args, calibration, detector, camera, sampler, quiet=True,
-                           timeout=args.auto_timeout)
+                           timeout=args.auto_timeout,
+                           exclude=[x for x, _t in recent], blocked=blocked)
+        if blocked:
+            stamp = time.monotonic()
+            recent.extend((x, stamp) for x in blocked)
         if point is None or point.get("skip"):
             continue
-        now = time.monotonic()
-        duplicate = (last_x is not None
-                     and abs(point["x_mm"] - last_x) <= args.dup_mm
-                     and now - last_t < args.retry_after_s)
-        if duplicate:
-            # 同一件还在原地（上一次夹空）或刚试过：等一会儿再看，不重复下发。
+        if any(abs(point["x_mm"] - x) <= args.dup_mm for x, _t in recent):
+            # 同一件还在原地（上一次夹空）：等 `--retry-after-s` 之后再试，不重复下发。
             time.sleep(0.2)
             continue
         deliver(args, point)
-        last_x, last_t = point["x_mm"], time.monotonic()
+        recent.append((point["x_mm"], time.monotonic()))
 
 
 def one_shot(args, calibration, detector, camera, sampler) -> int:

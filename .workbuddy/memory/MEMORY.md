@@ -52,9 +52,16 @@
 - **"静态抓取的动态版"**：臂起始在 exit 高位，物块越线后**踩着点**扑向现算的 `x_int`（窗口 350–390），到位即闭爪。不是"守在固定点等"。
 - 时序：`x_int = x + v×(advance+move+margin)`；`t_close = t_block − advance`；`t_stage = t_close − move − margin`。`move` 实测 1950 ms（exit→370）。
 - **硬约束**：`检测线 ≤ 窗口下沿 − v×2.8`。v=67.14 → 162 mm（现 120，余量 42 mm）。带速更高必须前移检测线。
-- `grasp_point.pick_target` 的选点规则已改为**黄框内 x 最大者优先**（静态/动态共用）。
+- `grasp_point.pick_target` 的选点规则已改为**黄框内 x 最大者优先**（静态/动态共用）；支持 `exclude_x`/`min_conf`，**去重必须在选之前剔**（选完再否掉会让第二件永远轮不到）。
 - 相机把夹爪识别成 ID5 舵机，读出的 y 会偏到 50 几，**不代表实际夹取位置偏**；夹取位置偏差由用户手动挪底座解决，不要再拿 y 做判据。
 - **闭爪必须走 C 单轴快路径**（`static_grasp_server.dynamic_close` 直接调 `rtcs-pl-g2`）：runner 每次启动 880 ms（实测 arm_ms−cycle_ms），放在闭爪关键路径上等于物块走 59 mm。闭爪后 runner 走 `--resume lift --grip-hold N`。
 - **闭爪 speed_raw = 1500**（上限），全程 757→404 ms；observe 600 ms 必须 ≥ 全程，否则空夹误判 CONTACT。此参数只对动态生效，静态仍用计划里的 800。
-- **常驻模式是默认**：`capture_agent.py`（q 退出、回执后带面清空 0.8 s 再武装）、`g5_dynamic_trigger.py --loop`。键盘轮询用 `scripts/keywatch.py`。
+- **常驻模式是默认**：`capture_agent.py`（q 退出、按位置去重不要求清空）、`g5_dynamic_trigger.py --loop`。键盘轮询用 `scripts/keywatch.py`。
+- **静态可抓区间 = 示教表两端**（现 295–420，`--min-x/--max-x` 默认取自表）；区间外只告警不抓——插值两端夹住不外推，越界会抓空气。
+- **夹取位 ID2 偏移 −50 静态也生效**（`static_grasp_server.DEFAULT_ID2_OFFSET`，包内 `id2_offset` 可覆盖，0=旧行为）。
+- **七步速度 2026-11-03 顶到 1500**（软件上限；夹爪 1000）。单位=步/秒，舵机能到 3400，
+  但 `SPEED_MAX_RAW=1500` 是**编译期常量**（pkg/six_controller/rtcs_top 三处），超限 fault 15 一帧不发；
+  再快必须重综合。改速度只用 `scripts/set_plan_speed.py --six N --gripper N --apply`。
+  approach/grasp 1000→1500 后 `move_to_pose_ms` 1950→**1590（估算，待实测回填）**；`advance_ms` 300 不变。
+- **协同看起来慢 = 轴行程大**：ID2 单步段可达 762 步，1000 步/s=0.76 s、1500=0.51 s，而末端只走几十毫米。
 

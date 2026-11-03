@@ -16,6 +16,11 @@
 *.hwh
 *.xsa
 
+# 例外：上板工程本身是交付物（赛题 3.3.5.1 "上板工程"），开源仓库里必须有，
+# 否则 clone 下来的人只拿到源码、board/ 是空的。体积 5 MB，可入库。
+!/artifacts/hw/rtcs_system.bit
+!/artifacts/hw/rtcs_system.xsa
+
 # Software build products
 build/
 install/
@@ -41,6 +46,9 @@ __pycache__/
 venv/
 vision_runs/
 audit_runs/
+
+# 提交包暂存目录（scripts/package_submission.sh 生成，不入库）
+/dist/
 
 # Vision weights require an explicit license review before distribution.
 /models/vision/*.pt

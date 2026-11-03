@@ -28,6 +28,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from typing import Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vision.camera import Camera, BACKENDS
@@ -46,7 +47,9 @@ DEFAULT_CAMERA_INDEX = 1
 BACKEND_ORDER = ("dshow", "msmf", "any")
 
 
-def pick_target(result, cls: int | None, calibration: "PlaneCalibration | None" = None):
+def pick_target(result, cls: int | None, calibration: "PlaneCalibration | None" = None,
+                exclude_x: Sequence[float] = (), exclude_mm: float = 8.0,
+                min_conf: float = 0.0):
     """每帧只取一个目标：**黄框（标定带面四边形）内 x 最大的那个**。
 
     2026-10-29 定（用户要求）：框里有多个可抓物时，优先抓最右边（x 最大）的那一件。
@@ -60,6 +63,14 @@ def pick_target(result, cls: int | None, calibration: "PlaneCalibration | None" 
     **margin 仍然按置信度算**（选中的比次优的高多少）：改成按 x 排序后，这个差值依然是
     "两个都像"的唯一信号。10-25 实测夹爪会被检出成 Cube（conf 0.36~0.43）、真方块 0.79~0.80，
     差 0.4 时取哪个都行，差得少就说明当帧不可信。
+
+    ``exclude_x`` / ``exclude_mm``（2026-10-31 加）：先按位置把候选剔掉，再选最优。
+    **必须在选之前剔，不能选完再判**——否则剩下那件永远轮不到：带上有两件时，
+    已抓过那件的位置上常驻着"被误检成 Cube 的夹爪"（conf 0.36~0.43），它 x 更大，
+    每帧都被选成第一，选完再否掉就是"只抓一件、之后一直空转"。
+
+    ``min_conf``：置信度门槛，同样在选之前过滤。夹爪误检、吸顶灯都远低于真方块
+    （实测 0.26~0.43 vs 0.74~0.87），这道门槛与位置剔除互补。
     """
     items = [d for d in result.detections if cls is None or d.class_id == cls]
     if not items:
@@ -68,6 +79,14 @@ def pick_target(result, cls: int | None, calibration: "PlaneCalibration | None" 
         inside = [d for d in items if inside_belt(calibration, d.center_x, d.center_y)]
         if inside:
             items = inside
+    if min_conf > 0:
+        items = [d for d in items if d.confidence >= min_conf]
+    if exclude_x and calibration is not None:
+        items = [d for d in items
+                 if not any(abs(_axis_x(calibration, d) - x) <= exclude_mm
+                            for x in exclude_x)]
+    if not items:
+        return None, len(result.detections), None
     items.sort(key=lambda d: (_axis_x(calibration, d), d.confidence), reverse=True)
     chosen = items[0]
     others = [d.confidence for d in items[1:]]

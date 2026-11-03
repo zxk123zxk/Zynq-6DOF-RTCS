@@ -21,6 +21,9 @@ files=(
   scripts/static_grasp_server.py
   # 动态拦截的快路径（闭爪/抬升直接调 C 命令，绕过 runner 的 1858 ms 启动）
   scripts/fast_path.py
+  # 现场改速度用的工具（改 plan 里的 42 个 speed 数字，自带 .bak 与上下限校验）。
+  # 板端也能直接跑：python3 scripts/set_plan_speed.py --six 1200 --apply
+  scripts/set_plan_speed.py
   config/g2_measured_limits.toml
   config/g3_station_plan.json
   config/g3_station_plan.template.json

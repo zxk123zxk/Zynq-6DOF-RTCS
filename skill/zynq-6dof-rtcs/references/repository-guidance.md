@@ -6,9 +6,9 @@ Use these paths for the AX7020/XC7Z020 implementation:
 
 - `src/pl/rtl/`: `rtcs_top.sv` integration; `axi_lite_regs.sv` control-plane register bank; `trajectory_engine.sv`, `servo_bus_master.sv`, and `safety_monitor.sv` deterministic control boundaries; `rtcs_pkg.sv` shared RTL definitions.
 - `src/ps/linux/`: UIO/MMIO application, shared register definitions, and CMake build.
-- `docs/0.1hardware_bringup.md`: G0–G6 的统一安全门禁、双轨制定义和阶段入口。
-- `docs/0.G0-ps-pl-foundation.md` 至 `docs/6.G6-final-delivery.md`: 每阶段唯一的核心改动、验收产物与边界。
-- `docs/7.sprint-plan-daily-tasks.md`: 冲刺日程、每日任务卡、每周验收目标与"明确跳过"清单。
+- `docs/engineering-notes.md`: 当前唯一的工程参考（硬件基线、实测限位、ABI/寄存器、串口契约、七步计划、动态参数、故障表）。G0–G6 各阶段记录已于 2026-11-03 合并进此文件，过程原文从 git 历史取。
+- `docs/report-1031.tex` / `.pdf`: 技术文档正本（冻结，只由文档负责人改）。
+- `metrics/`: 指标汇总表与口径，每行都指向 `evidence/` 下的原始记录。
 - `config/`: measured calibration and arm/bus data only; `arm_calibration.template.toml` is a template, not verified physical data.
 - `sim/`: RTL/protocol testbench and result material. `scripts/`: reproducible inspection and verification helpers.
 - `src/pl/vivado/create_project.tcl` and `src/pl/xdc/ax7020_template.xdc`: build and board-constraint inputs. Pin assignments remain placeholders until verified against the exact AX7020 schematic.
@@ -16,7 +16,7 @@ Use these paths for the AX7020/XC7Z020 implementation:
 
 ## 双轨制（dual-track gates）
 
-`docs/0.1hardware_bringup.md` 定义两条轨道，处理本仓库任何门禁、排期或评审时都要套用：
+`CLAUDE.md` 与本节定义两条轨道，处理本仓库任何门禁、排期或评审时都要套用：
 
 - **竞赛轨（快）**：每周产出可演示增量，**只保留红线门禁**，流程门禁全部关闭。
 - **归档轨（慢）**：满足文档、答辩与可复查性，**红线 + 全部流程门禁**。
@@ -27,7 +27,7 @@ Use these paths for the AX7020/XC7Z020 implementation:
 
 **硬规则：任何流程性门禁不得阻塞竞赛轨的运动路径。** 只产生"证据要求"而不阻止危险动作的检查，在竞赛轨中不得作为运动前置条件。反之，**红线门禁绝不因赶工期而放宽**——工期压力只能通过削减功能范围缓解。
 
-**已确认的硬件基线（2026-10-12）**：板端 ABI `0x5254000E` 已实测；**ID 1–5 为关节、ID 6 为夹爪**；相机为幻尔 30 万像素 / 120° 广角 USB 免驱摄像头（无深度），因此本工程**不使用点云或深度学习抓取检测**，视觉走"单目 2D + 平面单应映射（含畸变校正）"。
+**已确认的硬件基线（2026-10-12）**：板端 ABI `0x5254000E` 已实测；**ID 1–5 为关节、ID 6 为夹爪**；相机为**中奥维柯 3 mm / 90° 无畸变 UVC + CPL 偏振片**（2026-10-17 替换原幻尔 120° 广角，实测 1280×720，无深度），因此本工程**不使用点云或深度学习抓取检测**，视觉走"单目 2D + 平面单应映射"。
 
 ## Material_Library: permitted references, not dependencies
 

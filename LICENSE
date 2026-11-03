@@ -1,0 +1,32 @@
+MIT License
+
+Copyright (c) 2026 Zynq-6DOF-RTCS Team, 2026 全国大学生嵌入式芯片与系统设计竞赛参赛队 49824
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+本许可仅覆盖本队自研部分。仓库内第三方内容的许可与归属：
+
+- Ultralytics YOLO11（依赖，未随仓库分发源码）及其训练权重：AGPL-3.0。
+  `models/vision/*.pt` 与 `src/vision/` 中调用 ultralytics 的部分受此范围约束，
+  不自动再许可独立的 FPGA/控制模块。
+- OpenCV：Apache-2.0。
+- `docs/resource_file/` 下的 AMD 选题指南、AX7Z020B 手册、BusLinker 手册、
+  HX-30HM 协议与寄存器表：版权归原厂，仅作工程参考随附，不再分发。

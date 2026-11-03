@@ -84,6 +84,13 @@ DYNAMIC_EXTRA = {"dynamic_stage": ("--stop-after", "grasp")}
 DEFAULT_GRIP_CLOSE = {"target": 2200, "speed": 1500, "observe_ms": 1000}
 GRIP_OBSERVE_MIN_MS = 1000
 
+# 夹取位 ID2 的固定偏移（负数 = 把头抬高一点）。2026-10-31 起**静态也生效**：
+# 静态到位时同样抬高 50 步，合拢时上指把方块掀起一角、与带面接触面变小，
+# 抓住后到抬升之间那段时间的摩擦对抗明显减弱（动态先验证过，静态沿用同一组数）。
+# 包里的 "id2_offset" 字段可逐条覆盖；填 0 就是不加偏移（回到改动前）。
+DEFAULT_ID2_OFFSET = -50
+ID2_OFFSET_CMDS = ("static_capture", "dynamic_stage")
+
 
 def log(message: str) -> None:
     print(message, flush=True)
@@ -332,9 +339,10 @@ def handle(packet: dict, args) -> dict:
         return handle_close(packet, args, x_mm, y_mm, warnings)
 
     extra = list(DYNAMIC_EXTRA.get(cmd, ()))
-    offset = packet.get("id2_offset")
-    if isinstance(offset, int) and offset and cmd == "dynamic_stage":
-        # 现场指定的 ID2 偏移（负值 = 夹取点抬高一点），只作用于拦截位，不动静态路径。
+    offset = packet.get("id2_offset", DEFAULT_ID2_OFFSET)
+    if isinstance(offset, int) and offset and cmd in ID2_OFFSET_CMDS:
+        # 现场指定的 ID2 偏移（负值 = 夹取点抬高一点）。静态与拦截位共用同一组数，
+        # 静态下同样能减小"抓住后到抬升之间"与传动皮带的摩擦对抗。
         extra += ["--grasp-id2-offset", str(offset)]
     verdict = run_cycle(x_mm, y_mm, args, extra)
     report(packet, verdict, warnings)

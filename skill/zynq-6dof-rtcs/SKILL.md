@@ -48,11 +48,11 @@ This is strictly read-only: do not edit source, configuration, build files, docu
 - PS owns vision, calibration, FK/IK, task policy, deadlines, and logs. PL owns timing-critical trajectory/bus/protocol parsing, watchdogs, limits, E-stop, and deterministic scheduling.
 - AXI4-Lite is the current command/status interface. Do not add DMA, HLS, ROS, or a new hardware protocol merely because a reference project uses it; require measured need and user scope.
 - Do not add `Material_Library/` to build scripts, source lists, include paths, or deliverables. It is read-only reference material, and copied code requires a separate provenance/license review.
-- For changes to `servo_tx_en`, preserve the physical inhibit, electrical limits, and independent stop path. Do not use unrelated history or documentation tasks as a transmit permission check. The stage set is G0–G6 (see `docs/0.1hardware_bringup.md` to `docs/6.G6-final-delivery.md`).
+- For changes to `servo_tx_en`, preserve the physical inhibit, electrical limits, and independent stop path. Do not use unrelated history or documentation tasks as a transmit permission check. Stage history G0–G6 is archived in git; the current technical facts live in `docs/engineering-notes.md`.
 
 ## 双轨制（Dual-track gates）— 最高优先级流程约定
 
-This repository runs **two tracks**, defined in `docs/0.1hardware_bringup.md`. Apply them whenever you gate, sequence, or review work.
+This repository runs **two tracks**, defined in `CLAUDE.md`. Apply them whenever you gate, sequence, or review work.
 
 - **竞赛轨（fast）** — produces a demonstrable increment every week. **Only the red-line gates apply.** All process gates are switched off.
 - **归档轨（slow）** — satisfies documentation, review, and reproducibility. **Red-line + all process gates apply.**
@@ -65,7 +65,7 @@ This repository runs **two tracks**, defined in `docs/0.1hardware_bringup.md`. A
 
 For ID 6, a fixed no-overload closing count is not a universal workpoint: contact count varies with object size. Record requested count, last valid count, servo error, and observed object grasp separately. A grasp observed near 2373 despite a 2100 command and `0x20` overload is a physical observation plus a command fault, not a G2 motion success; neither fact alone creates a ban on later explicit commands. Future G3 task policy may decide how to proceed from contact evidence without changing the G2 diagnostic truth. Do not introduce a "must find a fault-free count for every object" prerequisite to continue development.
 
-**Current stage entry conditions** (measured, 2026-10-12): board ABI `0x5254000E` flashed and verified; ID 1–5 are joints and **ID 6 is the gripper**; ID 5's narrow internal angle window is resolved. Use `docs/7.sprint-plan-daily-tasks.md` for the day-by-day plan.
+**Current stage entry conditions** (measured, 2026-10-12): board ABI `0x5254000E` flashed and verified; ID 1–5 are joints and **ID 6 is the gripper**; ID 5's narrow internal angle window is resolved. Delivery status and measured metrics are in `metrics/` and `docs/report-1031.pdf`.
 
 ## Reusable AXI peripheral bring-up baseline
 
