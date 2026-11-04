@@ -60,3 +60,13 @@ docs/*.synctex.gz
 # Vision weights require an explicit license review before distribution.
 /models/vision/*.pt
 !/models/vision/yolo_a_cube_cylinder_best.pt
+
+# 内部工作日志与草稿：含队伍信息（编号/学校/姓名占位），按赛区要求不入公开仓库
+/.workbuddy/
+/tmp/
+
+# 海报 PPTx 单独提交，不进代码包，也不入仓库
+/docs/*.pptx
+/docs/preview_*.png
+/docs/images/workstation-oblique-original.jpg
+/docs/images/workstation-overhead-original.jpg

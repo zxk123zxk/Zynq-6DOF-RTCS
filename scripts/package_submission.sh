@@ -56,6 +56,18 @@ rm -f "$dist/vision_v11/1_manual_calibrated.jpg" \
       "$dist/vision_v11/result_color.jpg" "$dist/vision_v11/result_hough.jpg" \
       "$dist/vision_v11/debug_output.txt" 2>/dev/null || true
 
+# 技术文档、海报、报告插图、厂商资料**一律不进代码包**：
+#   · 报告 PDF/TeX 与海报 PPTx 在系统里单独提交，不需要重复打包；
+#   · 报告插图（工位照片等）只服务报告，脱离报告没有意义；
+#   · 厂商手册版权归原厂，不随包再分发（LICENSE 里也是这么写的）。
+rm -rf "$dist"/docs/images "$dist"/docs/resource_file 2>/dev/null || true
+rm -f "$dist"/docs/report-1031.pdf "$dist"/docs/report-1031.tex \
+      "$dist"/docs/appendix-c-llm-and-skill.tex "$dist"/docs/template-logo.png \
+      "$dist"/docs/*.pptx "$dist"/docs/preview_*.png 2>/dev/null || true
+# artifacts/reports 只留综合/实现/时序/方法学的 .rpt 与原始测量 .txt，
+# 内部的交接与素材评估 .md（含本机绝对路径、内部取舍讨论）不进包。
+rm -f "$dist"/artifacts/reports/*.md 2>/dev/null || true
+
 # 赛题 3.3.5.4：仓库内目录名与文件名须为纯英文。docs/ 里有个别历史文件（如
 # 镜像文件启动.md，旧 ABI 的复验笔记）按用户要求留在仓库里、不参与当前流程，
 # 但它们不进提交包——包里出现的每个文件都必须是英文名，否则在 Linux/CI 上是断链源。
@@ -85,11 +97,17 @@ fi
 
 echo "=== 必备项在位检查 ==="
 for must in README.md LICENSE build.tcl src/pl/rtl/rtcs_top.sv sim/run_regression_wsl.sh \
-            skill/README.md metrics/README.md docs/report-1031.pdf docs/report-1031.tex \
-            docs/engineering-notes.md docs/llm-collaboration.md \
+            skill/README.md metrics/README.md docs/engineering-notes.md \
+            docs/toolchain.md docs/llm-collaboration.md \
             artifacts/hw/rtcs_system.bit artifacts/hw/rtcs_system.xsa \
             artifacts/reports/utilization.rpt artifacts/reports/timing_summary.rpt; do
   [[ -s "$dist/$must" ]] && echo "  OK $must" || echo "  MISSING $must"
+done
+echo "=== 不得入包的敏感/冗余内容（应全部为 0）==="
+for pat in "docs/images" "docs/resource_file" "docs/report-1031.pdf" "docs/report-1031.tex" \
+           "*.pptx" "preview_*.png" "artifacts/reports/*.md"; do
+  n=$(find "$dist" -name "$pat" 2>/dev/null | wc -l)
+  echo "  ${pat}: ${n}"
 done
 
 # ---- 打包 -------------------------------------------------------------------

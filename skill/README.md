@@ -25,6 +25,7 @@ skill/
 | **使用方法** | 触发词 `使用skill修改`（改代码）或 `使用skill解释`（只读讲解）。`SKILL.md` 里是两套 workflow：修改流程 5 步（复述目标→只读相关文件→跨 PS/PL 契约同步→跑最小可验证集→报告改动/证据/风险）；解释流程 5 步（相关文件→总体流程→模块逐一→实现与占位分离）。`references/repository-guidance.md` 是"源真相在哪"的路径表，换题目时替换此表即可复用。 |
 | **已验证效果** | 本仓库 2026-09-29 至今的每一次 PS/PL 改动都走这条流程；`sim/run_regression_wsl.sh` 的 9 个 RTL testbench + 6 组 CLI 守卫全绿（`RTCS_WSL_REGRESSION_PASS`），ABI 从 0x02 迭代到 0x0E 未出现"寄存器语义两侧不一致"事故。 |
 | **失效条件** | ① IO 电平/方向未核验时不可用（`SKILL.md` 明确禁止）；② 需要 DMA/HLS/中断密集流时，本技能只覆盖 AXI4-Lite 寄存器语义，不覆盖高带宽数据通路；③ 若没有独立于处理器的输出禁用手段（本工程是物理禁发跳线 + 硬件急停），"安全边界"一节不成立。 |
+| **来源（从哪些失败总结）** | ① 早期"发运动命令前先预读起点"的门禁，把舵机一个**瞬时** ERROR 位放大成跨命令粘滞的全局锁死，拖了一周——于是定"当次错误当次报，不做持久锁存"；② 把 `ID2 ≤ 2000` 这条几何推测写成硬门禁，直接挡住已实测的 place 位点，当天进度停摆——于是定"会阻止执行的检查默认只告警，位点只认实测"；③ 夹爪夹紧时过载回包把整条 `move-six` 拖死——于是有逐轴忽略掩码。 |
 
 **可迁移的通用部分**（`SKILL.md` 末节 "Reusable AXI peripheral bring-up baseline"，与本题无关）：
 先定版本化寄存器映射再写 RTL、物理输出复位默认关断、单设备 + 逻辑分析仪先证协议再上多设备、
@@ -40,6 +41,7 @@ skill/
 | **使用方法** | 触发词 `镜像构建：`，冒号后写本次约束。5 步：校验仓库与 `git status` → `scripts/build_vivado.ps1 -Build`（必须时序满足且 bit/XSA 非空）→ PetaLinux `create_project.sh --import-hw` 导入**新** XSA → `build_sd_image.sh` 出卡文件并 `sha256sum -c` → 报告 WNS/TNS、路径、哈希与未完成项。 |
 | **已验证效果** | 本仓库 `artifacts/hw/rtcs_system.{bit,xsa}`、`artifacts/sd/{BOOT.BIN,image.ub,boot.scr,SHA256SUMS}` 均由该流程产出并上板启动；综合报告 `artifacts/reports/utilization.rpt`（LUT 12.69%）与 `timing_summary.rpt`（100 MHz 全满足）可追溯。 |
 | **失效条件** | ① 无 Vivado/PetaLinux 许可与 WSL 环境时不可执行；② 只证明"构建可复现"，**不证明板卡启动、USB 枚举或舵机可用**（`SKILL.md` 已写死不许宣称）；③ 不授权写实体 SD 卡、烧 QSPI 或下发舵机指令——这些必须由操作者在场手动完成。 |
+| **来源（从哪些失败总结）** | ① 2026-10-17：示教把 ID2/ID4 实测可达点改宽，只同步了 `config/g2_measured_limits.toml`、没同步综合进 bitstream 的 `g2_board_limits_pkg.sv`，板端 `move-six` 以 fault=12 直接拒发——于是 `check_limit_sync.py` 成为打包的第一道硬检查；② 载荷靠手工拖拽，重打包时 `rm -rf` 把 `static_grasp_server.py` 一起删了，现场变成"PC 发坐标、板端没人收"——于是改成脚本生成 + `cmp` 逐字节对正本；③ 板端 Python ≤3.11 不支持 f-string 嵌套同类引号，本地 3.13 编过、板上 `SyntaxError`，runner 秒退且无一行日志——于是有 `check_py_compat.py`。 |
 
 ---
 

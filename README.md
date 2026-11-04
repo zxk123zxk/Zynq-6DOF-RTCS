@@ -3,7 +3,8 @@
 面向流水线**异常品剔除工位**的桌面分拣单元：单目相机 + Zynq-7020 直驱 6 只 HX-30HM 总线舵机，
 按异常品密度切换两种模式——带面静止时**批次拣选**，连续运行时**预测拦截**。
 
-参赛编号 49824 · 2026 全国大学生嵌入式芯片与系统设计竞赛 · FPGA 创新赛道 · AMD 自主选题（初级组）。
+2026 全国大学生嵌入式芯片与系统设计竞赛 · FPGA 创新赛道 · AMD 自主选题（初级组）。
+报告与代码按赛区要求匿名提交：仓库内不含参赛编号、队名、学校与成员姓名。
 
 | 实测指标 | 数值 | 条件 |
 | --- | --- | --- |
@@ -43,6 +44,8 @@
 2. **构建**：`vivado -mode batch -source build.tcl` → `artifacts/hw/rtcs_system.bit` + `.xsa`
    （默认带 TTL 端口；加 `-tclargs base` 只做 BD/RTL 验证，不导出舵机 IO）。
    随后按 `src/ps/petalinux/` 的脚本由 XSA 生成 `BOOT.BIN` / `image.ub`。
+   **工具版本为 Vivado / PetaLinux 2023.2**（赛题推荐 2026.1 或 2025.2）——为什么用 2023.2、
+   版本证据在哪、如何在 2025.2 上重跑，见 [`docs/toolchain.md`](docs/toolchain.md)。
 3. **上板**：SD 卡放 `BOOT.BIN` + `image.ub` + 运行载荷；登录后把载荷拷到 `~/rtcs`
    （该目录在 RAM，断电即丢）。载荷由 `bash scripts/stage_sd_payload.sh` 从正本生成，
    5 个 `.py` → `~/rtcs/scripts/`，4 个配置 → `~/rtcs/config/`。
@@ -54,8 +57,9 @@
    —— `g5_dynamic_trigger.py --serial COM8 --loop`（连续抓取）。
    每轮输出 `grip=contact|empty`、`gripper_position`、`cycle_ms`。
 
-完整步骤见 `docs/report-1031.pdf` 附录 A；接口、参数与故障表见
-[`docs/engineering-notes.md`](docs/engineering-notes.md)。
+完整步骤另见技术文档附录 A（**报告与海报在系统内单独提交，不在本代码包内**）；接口、参数与故障表见
+[`docs/engineering-notes.md`](docs/engineering-notes.md)，工具链版本见
+[`docs/toolchain.md`](docs/toolchain.md)。
 
 ## 两种模式的差别
 
