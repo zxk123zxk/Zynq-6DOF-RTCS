@@ -1,94 +1,37 @@
-> 历史记录：下文是旧 USB/G0 镜像（PL ABI `0x52540001`）的复验笔记，不适用于当前 `artifacts/sd/`。当前上板流程（拷脚本、跑状态机、七步位点）见 [状态机编排层](状态机编排层-20261016.md) §9。不要用下文的旧 ID 预期判断新镜像。
+# docs 索引
 
-以下仅保留旧镜像的历史复验记录；当前仓库已不再提供这组旧文件：
+| 文件 | 内容 | 说明 |
+| --- | --- | --- |
+| `report-1031.tex` / `report-1031.pdf` | 技术文档正本（五部分 + 附录 A 复现步骤 + 附录 B 指标与证据对照 + 附录 C 大模型协作与技能包），24 页 | 改完**连编两遍**（第二遍才出目录） |
+| `appendix-c-llm-and-skill.tex` | 附录 C 的正文，由 `report-1031.tex` 用 `\input` 引入（赛题 3.3.5.3 要求的两节） | 可改 |
+| `engineering-notes.md` | 工程参考：ABI/寄存器、实测限位、串口契约、七步计划、动态参数、故障表 | 可改 |
+| `toolchain.md` | 工具链版本（Vivado 2023.2 等）+ 证据 + 为何不用 2025.2 + 换版本重跑（赛题 3.3.3.1） | 可改 |
+| `llm-collaboration.md` | 大模型协作记录（提示词、判断、自我纠错轨迹） | 可改 |
+| `images/` | 报告插图，`report-1031.tex` 直接引用（文件名均为英文） | 只增不删 |
+| `resource_file/` | 厂商资料：AMD 选题指南、AX7Z020B 手册、BusLinker 手册、HX-30HM 协议与寄存器表 | 只读 |
 
-起始输入框处有petalinux-rtcs login: 
-输入petalinux，设置密码，建议995995
-登录成功后输入框变为petalinux-rtcs:~$
+## 提交时不在代码包内的文件
 
-在 shell 提示符下依次执行（USB 接法与当前一致，编号为 1-1、ttyACM0；若重新枚举后变化，先核对实际设备节点）：
+技术文档（`report-1031.*`）、附录 C、报告插图、厂商资料、海报 PPTx 都**不进代码包**：
+报告与海报在系统里单独提交，插图与厂商资料只服务报告。代码包由
+`scripts/package_submission.sh` 生成，脚本会把这些一并剔除。
 
-    uname -a
-    grep '^MemTotal:' /proc/meminfo
-    grep '/dev/mmcblk0p1 ' /proc/mounts
-    sudo devmem 0x43c00000 32
-    zcat /proc/config.gz | grep '^CONFIG_USB_ACM=y$'
-    cat /sys/bus/usb/devices/1-1/idVendor /sys/bus/usb/devices/1-1/idProduct
-    ls -l /dev/ttyACM0
-    command -v rtcs-buslinker-g1
+## 已删除并合并去向
 
-预期依次为 Linux armv7l、约 1028308 kB、SD FAT 分区挂载、0x52540001、CONFIG_USB_ACM=y、1a86/55d3、/dev/ttyACM0、/usr/bin/rtcs-buslinker-g1。任一项不符即停在该项。若需复验 UIO，重启后运行以下三条，预期名称为 rtcs；模块绑定不跨重启保存：
+2026-11-03 起，`docs/` 只保留上述文件。此前的 G0–G6 阶段记录、冲刺计划、报告分工、
+半自动闭环说明、视觉模块文档、动态抓取评估等 10 份文档已删除，有效结论分别并入：
 
-    sudo modprobe -r uio_pdrv_genirq 2>/dev/null || true
-    sudo modprobe uio_pdrv_genirq of_id=generic-uio
-    cat /sys/class/uio/uio0/name
+| 原文件 | 去向 |
+| --- | --- |
+| `0.1hardware_bringup.md`、`0.G0…`、`1.G1…`、`2.G2…` | `engineering-notes.md` §1–§3（硬件基线、限位、ABI、命令） |
+| `3.G3…`、`3.1-G3…` | `engineering-notes.md` §3–§4（命令速查、七步计划、夹持判据） |
+| `4.G4…` | `engineering-notes.md` §2.2–§2.3、§6（串口契约、坐标约定、视觉边界） |
+| `5.G5…` | `engineering-notes.md` §5（预测拦截参数与时序约束）；逐轮数据仍在 `evidence/` |
+| `6.G6…` | 已无独立内容，交付项见报告附录 A/B 与 `metrics/` |
+| `视觉到抓取端到端流程.md` | `engineering-notes.md` §7（本机与板端环境） |
 
-sudo rtcs-pl-g1 --uio /dev/uio0 --id 2 read-position
+旧镜像复验笔记（原 `镜像文件启动.md`，PL ABI `0x52540001`）已删除：它自述"不适用于当前
+`artifacts/sd/`"、链接指向已删文档，且正文含板卡登录口令。需要追溯时从 git 历史取回。
 
-sudo rtcs-pl-g2 --uio /dev/uio0 move --id 1 --target 2000 --speed-raw 1500 --time-raw 0 --execute
-
-
-petalinux-rtcs:~$ sudo rtcs-pl-g2 --uio /dev/uio0 move --id 6 --target 1500 --speed-raw 500 --time-raw 0 --execute
-RTCS_PL_G2 board=AX7Z020B abi=0x5254000a physical_tx=ENABLED
-commit id=6 target=1500 speed_raw=500 time_raw=0 torque_toggle=0x28:1 command_deadline_ticks=119000978346
-ERR g2_fault=8 write_sent=1 last_position=0
-
-
-& "D:\11.Programming_Software\Python\python.exe" "D:\3.Electronic_Information\2026.9-ES_Competition-FPGA-AMD\Zynq-6DOF-RTCS\vision_v11\scripts\camera_demo.py" --device cpu --backend msmf --auto-exposure 0.75 --exposure -6 --output-dir "D:\3.Electronic_Information\2026.9-ES_Competition-FPGA-AMD\Zynq-6DOF-RTCS\vision_runs\v11_$(Get-Date -Format yyyyMMdd_HHmmss)"
-
-
-
-sudo rtcs-pl-g1 --uio /dev/uio0 probe
-sudo rtcs-pl-g2-six --uio /dev/uio0 limits
-sudo rtcs-pl-g2-six --uio /dev/uio0 diagnose
-sudo rtcs-pl-g2-six --uio /dev/uio0 torque-status --id 5
-
-
-id1:2000 (1000 - 3000)
-id2:861  (861 - 1500)
-id3:3000 (2000 - 3117)
-id4:2861 (2861 - 2000)
-id5:2000 (0 - 4000)
-id6:1585 (2050 - 3000)
-
-sudo rtcs-pl-g2-six --uio /dev/uio0 move-six \
-  --axis 1:2061:500:10 --axis 2:2000:500:10 --axis 3:2115:500:10 \
-  --axis 4:3009:500:10 --axis 5:2006:500:10 --axis 6:2500:500:10 \
-  --observe-ms 8000 --execute
-
-sudo rtcs-pl-g2-six --uio /dev/uio0 move-six \
---axis 1:2003:500:10 --axis 2:884:500:10 --axis 3:2984:500:10 \
---axis 4:2859:500:10 --axis 5:2004:500:10 --axis 6:2063:500:10 \
---observe-ms 8000 --execute
-
-
-sudo python3 scripts/g3_station_runner.py config/g3_station_plan.json --uio /dev/uio0 --once
-
-
-ls /run/media/                                  
-SD=/run/media/mmcblk0p1
-mkdir -p ~/rtcs/scripts ~/rtcs/config
-cp -v "$SD"/*.py ~/rtcs/scripts/               
-cp -v "$SD"/*.toml "$SD"/*.json ~/rtcs/config/  
-cd ~/rtcs && chmod +x scripts/*.py && ls scripts config  
-head -8 config/grasp_teaching_table.json      
-
-__________________________
-cd vision_v11\Zynq_RTCS_YOLO_Vision_Module_v1_1
-python scripts\belt_calibration_dynamic.py
-python scripts\camera_demo.py
-
-//板上进行
-cd ~/rtcs
-sudo python3 scripts/static_grasp_server.py --source stdin --uio /dev/uio0
-
-.\env.cmd scripts\capture_agent.py --serial COM8 --class-name cube
-
-.\env.cmd scripts\g5_dynamic_trigger.py --serial COM8 --loop
-
-_____________________________
-
-sudo python3 scripts/g3_station_runner.py config/g3_station_plan.json --uio /dev/uio0 --grasp-xy 395,36 --teaching-table config/grasp_teaching_table.json --once
-sudo python3 scripts/g3_station_runner.py config/g3_station_plan.json --uio /dev/uio0 --grasp-xy 345,36 --teaching-table config/grasp_teaching_table.json --once
-
-.\env.cmd scripts\capture_agent.py --serial COM8
+需要追溯旧的推进过程或逐条操作记录时，从 git 历史取回（`git log -- docs/`）。
+过程记录不再单独维护：同一事实只写一处，写进报告或本文件，避免两份文档互相打脸。

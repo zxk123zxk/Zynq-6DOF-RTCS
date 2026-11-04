@@ -2,7 +2,7 @@ Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2023 Advanc
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2023.2 (win64) Build 4029153 Fri Oct 13 20:14:34 MDT 2023
 | Date         : Fri Oct  9 19:32:46 2026
-| Host         : zxkzxk running 64-bit major release  (build 9200)
+| Host         : build-host running 64-bit major release  (build 9200)
 | Command      : report_methodology -file D:/3.Electronic_Information/2026.9-ES_Competition-FPGA-AMD/Zynq-6DOF-RTCS/artifacts/reports/methodology.rpt
 | Design       : rtcs_system_wrapper
 | Device       : xc7z020clg400-2
