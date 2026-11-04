@@ -4,8 +4,9 @@
 静态单轮周期 P50,core,7840,ms,收到坐标→exit 到位;含视觉与串口,evidence/g3-static-closedloop-20261026.md,同静态成功率
 静态单轮周期 P95,core,9423,ms,同上,evidence/g3-static-closedloop-20261026.md,同上
 静态单轮周期 max,core,10961,ms,首轮含归位,evidence/g3-static-closedloop-20261026.md,同上
-动态单轮周期 P50,core,4589,ms,武装→咬合→搬运→exit,evidence/g5-dynamic-20261030.md,同动态成功率
-动态单轮周期 P95,core,4788,ms,同上,evidence/g5-dynamic-20261030.md,同上
+动态抓取段 P50,core,4589,ms,武装→咬合→搬运→exit（不含视觉出点与回待命位）,evidence/g5-dynamic-20261030.md,同动态成功率
+动态抓取段 P95,core,4788,ms,同上,evidence/g5-dynamic-20261030.md,同上
+动态完整一轮 P50,core,8600,ms,视觉出点→抓取搬运→回待命位；与抓取段差在出点与等下一件,evidence/g5-dynamic-20261030.md,日志 cycle_ms 含出点段
 臂推进耗时,core,1952,ms,待命位→拦截点 370 mm;六轴插值,evidence/g5-dynamic-20261030.md,g5_dynamic_trigger.py 日志 stage_ms
 闭爪到咬合,core,1010,ms,夹住工况;夹空为 562 ms,evidence/g5-dynamic-20261030.md,日志 close_ms
 定位重复性,core,±0.15,mm,同一物理点三次读数极差 372.17/372.16/372.43,evidence/g3-static-openloop-20261025.md,capture_agent.py --trial

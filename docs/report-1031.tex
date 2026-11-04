@@ -206,7 +206,7 @@ PS 和 PL 分工更适合这类任务：PS 端运行 Linux 镜像程序，做舵
 \subsection{应用领域}
 
 本作品对准产线上的\textbf{来料异常品剔除工位}。以注塑车间为例，一条线连续
-生产同款外壳，换模或混料时偶有几只上一款混进来，尺寸相差不大，人工抽检比较困难。当它流到
+生产同款外壳，换模或混料时偶有几只上一款混进来成为异常品。当它流到
 装配线时会卡住夹具，逼停整条产线，不翻出来就开不了线。如果加装专用剔除机构
 的话性价比不高，因为一种机构只解决一种缺陷，换型还得改机械对位。
 
@@ -214,9 +214,9 @@ PS 和 PL 分工更适合这类任务：PS 端运行 Linux 镜像程序，做舵
 PLC、不取电机信号、不与传送带通信，非常方便。换型只换标定与判定规则，机械结构仍然不变，这是它相对专用
 器械最实际的价值。
 
-更实用的一点是\textbf{按密度换策略}。异常品零星出现时不停产线，臂在带面上方跟上去拦截，抓完
-即回位；异常品成批出现时把整批料送到工位后停机，逐件确认、逐件拣出，宁可慢也不漏。一套
-硬件与视觉，按工况换节拍，不必为两种工况买两套设备。
+更实用的一点是\textbf{按密度换策略}。异常品零星出现时不必停产线，臂在带面上方跟上去拦截，抓完
+即回位；异常品成批出现时把整批料送到工位后停机，逐件确认、逐件拣出，宁可慢也不漏。一套设备
+兼顾硬件与视觉，按工况换流水线节拍，不必为两种工况买两套设备。
 
 同一思路可复制到包装线缺件与异物剔除、3C 来料超差分选；也适合做教学平台，演示
 “看见—判断—执行”闭环。
@@ -327,7 +327,7 @@ $\rightarrow$ 指标实测与证据归档，见图~\ref{fig:flow}。
 图~\ref{fig:arch}。
 
 \begin{figure}[H]\centering
-\includegraphics[width=\linewidth]{images/全流程.png}
+\includegraphics[width=\linewidth]{images/flow-overview.png}
 \caption{系统整体框图：上位机（红框）完成四点标定与 YOLO11n 识别，经 UART 串口下发；
 PS 负责示教表插值与七步状态机，PL 负责六轴同步组帧与限位校验，经总线协议驱动总线舵机}
 \label{fig:arch}
@@ -416,7 +416,7 @@ PL 侧资源与时序（Vivado 2023.2，impl 后）：LUT 6\,751（12.69\%）、
 信号与供电的连接关系见图~\ref{fig:wiring}。
 
 \begin{figure}[H]\centering
-\includegraphics[width=\linewidth]{images/硬件.png}
+\includegraphics[width=\linewidth]{images/hardware-wiring.png}
 \caption{信号与供电连接关系：三态 IO 的 TX/RX 与 DIR 经总线转接板（出厂跳帽置
 Servo-TTL）并到一条单线半双工总线上，六只舵机并联挂载；舵机由独立电源 5--14\,V
 供电，并与开发板共地}
@@ -664,11 +664,11 @@ PL 侧模块划分与职责见表~\ref{tab:pl}。
 \end{figure}
 \begin{figure}[H]\centering
 \includegraphics[width=0.96\linewidth,height=0.40\textheight,keepaspectratio]{images/workstation-oblique-natural-cleanup.png}
-\caption{工位斜侧全景（背景经清理）}\label{fig:workstation-oblique}
+\caption{工位斜侧全景}\label{fig:workstation-oblique}
 \end{figure}
 \begin{figure}[H]\centering
 \includegraphics[width=0.96\linewidth,height=0.40\textheight,keepaspectratio]{images/workstation-overhead-natural-cleanup.png}
-\caption{工位俯视布局（背景经清理）}\label{fig:workstation-overhead}
+\caption{工位俯视布局}\label{fig:workstation-overhead}
 \end{figure}
 
 \subsection{工程成果}
@@ -700,7 +700,7 @@ PL 侧模块划分与职责见表~\ref{tab:pl}。
 \code{Servo}--\code{TTL} 档，即把 PL 的三态 IO 转换为单线半双工舵机总线；跳帽若误置
 \code{USB} 档，总线将由板载 USB 芯片驱动而使 PL 失去控制权。
 \begin{figure}[H]\centering
-\includegraphics[width=0.85\linewidth,keepaspectratio]{images/PCB图.png}
+\includegraphics[width=0.85\linewidth,keepaspectratio]{images/buslinker-pcb.png}
 \caption{总线转接板（BusLinker-V3.0）接口定义：TTL 侧 \code{BUS\_TX}/\code{BUS\_RX}/\code{GND}
 对应 PL 输出、输入与共地，两路 S 端口串接舵机总线，电源经接线端子引入（上限 14\,V）}
 \label{fig:buslinker}
@@ -886,8 +886,8 @@ PS 负责坐标到关节的映射与任务编排，PL 负责总线时序与安�
 三组数据。现在要求除安全停机外，任何检查只警告不拦截。
 
 \textbf{三是AI算的数会前后矛盾。}同一轮抓取，“抓取段 4.59\,s”和“完整一轮 8.6\,s”
-被混成一个数，摘要和正文因此对不上；还有的参数压根没测，先填个看着合理的值就算数。现在的
-规矩是：凡进报告的数先落到 \code{metrics/}，跟证据对不上的一律不写。
+被混成一个数，导致起初写文档时前后矛盾；还有的参数压根没测，先填个看着合理的值就算数。现在的
+要求是，凡进报告的数先落到 \code{metrics/}，跟证据对不上的一律不写。
 
 \textbf{四是AI写的说法经不起问。}“程序自动识别作业面”“单应解决镜头畸变”“经单元测试
 确认”，纸面上每句都说得通，真被问到就答不上来。定稿前我们把全文对着代码和配置一条一条核，
@@ -1052,5 +1052,9 @@ PL 资源与时序 & LUT 12.69\%、100\,MHz 全满足 & \code{utilization.rpt}\n
 \bottomrule
 \end{tabular}
 }
+
+% 附录 C：赛题 3.3.5.3 要求的“大模型协作记录”与“技能包提炼过程”。
+% 单独成文件是为便于维护；正文内容见 docs/appendix-c-llm-and-skill.tex。
+\input{appendix-c-llm-and-skill}
 
 \end{document}

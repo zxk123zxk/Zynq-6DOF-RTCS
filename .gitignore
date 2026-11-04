@@ -50,6 +50,13 @@ audit_runs/
 # 提交包暂存目录（scripts/package_submission.sh 生成，不入库）
 /dist/
 
+# LaTeX 中间产物：报告只提交 .tex 与 .pdf，改完连编两遍即可，中间文件不入库
+docs/*.aux
+docs/*.out
+docs/*.toc
+docs/*.log
+docs/*.synctex.gz
+
 # Vision weights require an explicit license review before distribution.
 /models/vision/*.pt
 !/models/vision/yolo_a_cube_cylinder_best.pt

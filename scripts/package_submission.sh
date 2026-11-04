@@ -44,13 +44,25 @@ cp artifacts/reports/*.rpt artifacts/reports/*.md artifacts/reports/*.txt \
    "$dist/artifacts/reports/" 2>/dev/null || true
 
 # ---- 清理不该进包的 ---------------------------------------------------------
-find "$dist" -type d -name "__pycache__" -prune -exec rm -rf {} + 2>/dev/null || true
+# .venv/venv 一定要剔：venv 不能跨机器搬（pyvenv.cfg 里写死了原机器的解释器路径），
+# 拿到手也跑不起来，纯粹白占 12 MB / 731 个文件，还会把 pip 自带的 LICENSE 混进包里。
+find "$dist" -type d \( -name "__pycache__" -o -name ".venv" -o -name "venv" \
+     -o -name ".pytest_cache" -o -name "*.egg-info" \) -prune -exec rm -rf {} + 2>/dev/null || true
 find "$dist" -type f \( -name "*.pyc" -o -name "*.pyo" -o -name "*.jou" -o -name "*.log" \
-     -o -name ".DS_Store" -o -name "*.synctex.gz" \) -delete 2>/dev/null || true
+     -o -name ".DS_Store" -o -name "*.synctex.gz" -o -name "*.aux" -o -name "*.out" \
+     -o -name "*.toc" \) -delete 2>/dev/null || true
 # 视觉模块里队友的一次性调试图与重复权重不随包分发
 rm -f "$dist/vision_v11/1_manual_calibrated.jpg" \
       "$dist/vision_v11/result_color.jpg" "$dist/vision_v11/result_hough.jpg" \
       "$dist/vision_v11/debug_output.txt" 2>/dev/null || true
+
+# 赛题 3.3.5.4：仓库内目录名与文件名须为纯英文。docs/ 里有个别历史文件（如
+# 镜像文件启动.md，旧 ABI 的复验笔记）按用户要求留在仓库里、不参与当前流程，
+# 但它们不进提交包——包里出现的每个文件都必须是英文名，否则在 Linux/CI 上是断链源。
+find "$dist" -type f | LC_ALL=C grep -P '[^\x00-\x7F]' | while IFS= read -r f; do
+  echo "DROP_NONASCII ${f#"$dist"/}"
+  rm -f "$f"
+done
 
 # ---- 体检 -------------------------------------------------------------------
 echo "=== 文件数与体积 ==="
@@ -66,7 +78,7 @@ echo "=== 非英文文件名（赛题 3.3.5.4 要求纯英文小写/数字/_/-�
 find "$dist" -type f | LC_ALL=C grep -P '[^\x00-\x7F]' > /tmp/rtcs_nonascii.txt || true
 if [[ -s /tmp/rtcs_nonascii.txt ]]; then
   sed "s|$dist/||" /tmp/rtcs_nonascii.txt | sed 's|^|  NONASCII |'
-  echo "  （docs/镜像文件启动.md 与 3 张 tex 插图属冻结文件，已在 docs/README.md 登记，可接受）"
+  echo "  FAIL_NONASCII 上面的文件仍在包里，必须先改名或加进删除清单" >&2
 else
   echo "  OK 全部为 ASCII 文件名"
 fi
